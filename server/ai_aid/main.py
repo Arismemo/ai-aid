@@ -22,6 +22,20 @@ def create_app() -> FastAPI:
 
     register_handlers(app)
 
+    from fastapi.exceptions import RequestValidationError
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_handler(request, exc: RequestValidationError):
+        fields = [".".join(str(p) for p in e["loc"][1:]) for e in exc.errors()]
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "bad_request",
+                "message": "validation failed",
+                "fields": fields,
+            },
+        )
+
     # Body-size guard: relies on Content-Length being honest. Production
     # deployments must enforce the real cap at the reverse proxy
     # (e.g. nginx client_max_body_size) since clients can spoof headers
