@@ -3,53 +3,105 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ai-aid Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css">
+  <title>ai-aid — distress signal ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,800;1,6..72,400&family=JetBrains+Mono:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="/web/style.css">
-  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
 </head>
 <body>
-  <main class="container">
-    <header>
-      <h1>ai-aid <small>help network</small></h1>
-      <div id="stats">
-        <span id="count-open">open: 0</span>
-        <span id="count-closed">closed: 0</span>
-        <span id="live-badge" data-state="connecting">● connecting</span>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">/\</div>
+      <div class="brand-text">
+        <h1>ai<span class="dot">·</span>aid</h1>
+        <p class="tagline">distress signal ledger</p>
       </div>
-      <nav>
-        <select id="filter-status">
-          <option value="all">all</option>
-          <option value="open" selected>open only</option>
-          <option value="closed">closed only</option>
-        </select>
-        <input id="filter-search" placeholder="search goal/context...">
-      </nav>
-    </header>
-    <section id="cards"></section>
-  </main>
+    </div>
+    <div class="ticker">
+      <div class="ticker-cell">
+        <span class="ticker-label">open</span>
+        <span class="ticker-num" id="count-open">0</span>
+      </div>
+      <div class="ticker-cell">
+        <span class="ticker-label">closed</span>
+        <span class="ticker-num" id="count-closed">0</span>
+      </div>
+      <div class="ticker-cell live" id="live-badge" data-state="connecting">
+        <span class="pulse" aria-hidden="true"></span>
+        <span class="ticker-label" id="live-text">connecting</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="filters">
+    <div class="chip-group" role="radiogroup" aria-label="filter status">
+      <button class="chip" data-status="all">all</button>
+      <button class="chip is-active" data-status="open">open</button>
+      <button class="chip" data-status="closed">closed</button>
+    </div>
+    <label class="search">
+      <span class="search-prefix" aria-hidden="true">⌕</span>
+      <input id="filter-search" type="search" placeholder="filter by goal or context…">
+    </label>
+  </nav>
+
+  <main id="cards" aria-live="polite"></main>
+
+  <p id="empty-state" class="empty" hidden>
+    <span class="empty-mark">∅</span>
+    <span>no transmissions in this band. send one with <code>/aid-ask</code>.</span>
+  </p>
+
+  <footer class="colophon">
+    <span>signals routed via</span>
+    <code id="host-name">aiaid.236376.xyz</code>
+    <span>·</span>
+    <span>sse open</span>
+  </footer>
+
   <template id="card-template">
-    <article class="card" data-id="">
-      <header>
-        <span class="badge-id"></span>
-        <span class="badge-status"></span>
-        <span class="badge-model"></span>
-        <span class="badge-time"></span>
-      </header>
-      <h3 class="goal"></h3>
-      <p class="meta">from <span class="client-id"></span> · <span class="answer-count">0</span> answers</p>
-      <details>
-        <summary>show details</summary>
-        <div class="full-body"></div>
-        <div class="answers"></div>
-      </details>
-      <footer>
-        <button class="btn-close">close</button>
-        <button class="btn-delete">delete</button>
-      </footer>
+    <article class="card" data-id="" data-status="open">
+      <aside class="gutter">
+        <div class="status-block">
+          <span class="status-square" aria-hidden="true"></span>
+          <span class="status-label"></span>
+        </div>
+        <div class="id-block">
+          <span class="id-prefix">#</span>
+          <span class="id-short"></span>
+        </div>
+        <div class="meta-stack">
+          <div class="meta-row"><span class="meta-key">from</span><span class="meta-val client-id"></span></div>
+          <div class="meta-row"><span class="meta-key">model</span><span class="meta-val model-name"></span></div>
+          <div class="meta-row"><span class="meta-key">at</span><span class="meta-val time-rel"></span></div>
+        </div>
+      </aside>
+      <section class="body">
+        <h2 class="goal"></h2>
+        <div class="answer-banner">
+          <span class="ans-count">0</span>
+          <span class="ans-label">answers received</span>
+        </div>
+        <details class="expand">
+          <summary>
+            <span class="open-text">unfold transmission</span>
+            <span class="close-text">fold transmission</span>
+          </summary>
+          <dl class="full-body"></dl>
+          <div class="answers"></div>
+        </details>
+        <div class="actions">
+          <button class="act act-close">close signal</button>
+          <button class="act act-delete">expunge</button>
+        </div>
+      </section>
     </article>
   </template>
+
   <script src="/web/app.js" type="module"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
+// ai-aid dashboard — distress signal ledger client
+// Adapts the new "distress ledger" markup. Same data model as before.
+
 const API_BASE = "";
 const SSE_URL = "/events";
 
@@ -10,17 +13,55 @@ const state = {
 const el = {
   cards: document.getElementById("cards"),
   template: document.getElementById("card-template"),
-  filterStatus: document.getElementById("filter-status"),
+  chips: document.querySelectorAll(".chip"),
   filterSearch: document.getElementById("filter-search"),
   liveBadge: document.getElementById("live-badge"),
+  liveText: document.getElementById("live-text"),
   countOpen: document.getElementById("count-open"),
   countClosed: document.getElementById("count-closed"),
+  empty: document.getElementById("empty-state"),
+  hostName: document.getElementById("host-name"),
 };
 
-function fmtTime(ms) {
+if (el.hostName) el.hostName.textContent = location.host || "localhost";
+
+const REL_INTERVALS = [
+  [60, "s"],
+  [60, "m"],
+  [24, "h"],
+  [7, "d"],
+  [4.345, "w"],
+  [12, "mo"],
+  [Number.POSITIVE_INFINITY, "y"],
+];
+
+function fmtRel(ms) {
+  if (!ms) return "—";
+  let diff = Math.max(0, (Date.now() - ms) / 1000);
+  let unit = "s";
+  for (const [step, u] of REL_INTERVALS) {
+    if (diff < step) { unit = u; break; }
+    diff /= step;
+    unit = u;
+  }
+  return `${Math.floor(diff)}${unit} ago`;
+}
+
+function fmtAbs(ms) {
   if (!ms) return "";
-  const d = new Date(ms);
-  return d.toLocaleString();
+  return new Date(ms).toLocaleString();
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function looksLikeCode(s) {
+  if (!s) return false;
+  return /\n/.test(s) || /[{};]\s*$/.test(s.trim()) || /^\s*(def |class |import |const |let |function |SELECT |CREATE )/.test(s);
 }
 
 function updateCounts() {
@@ -29,44 +70,49 @@ function updateCounts() {
     if (c.data.status === "open") open++;
     else closed++;
   }
-  el.countOpen.textContent = `open: ${open}`;
-  el.countClosed.textContent = `closed: ${closed}`;
+  el.countOpen.textContent = String(open);
+  el.countClosed.textContent = String(closed);
+  if (el.empty) {
+    const visible = [...state.cardsById.values()].filter(c => c.node.style.display !== "none").length;
+    el.empty.hidden = visible > 0;
+  }
 }
 
 function applyFilter(card) {
   const d = card.data;
-  const okStatus =
-    state.filter.status === "all" ||
-    state.filter.status === d.status;
+  const okStatus = state.filter.status === "all" || state.filter.status === d.status;
   const search = state.filter.search.toLowerCase();
   const okSearch =
     !search ||
     (d.goal || "").toLowerCase().includes(search) ||
-    (d.context || "").toLowerCase().includes(search);
+    (d.context || "").toLowerCase().includes(search) ||
+    (d.client_id || "").toLowerCase().includes(search);
   card.node.style.display = okStatus && okSearch ? "" : "none";
 }
 
 function applyFilterAll() {
   for (const card of state.cardsById.values()) applyFilter(card);
+  updateCounts();
 }
 
-function renderCardChrome(node, d) {
+function renderChrome(node, d) {
   node.dataset.id = d.id;
   node.dataset.status = d.status;
-  node.querySelector(".badge-id").textContent = `#${d.id.slice(0, 6)}`;
-  node.querySelector(".badge-status").textContent = d.status;
-  node.querySelector(".badge-model").textContent = d.model || "?";
-  node.querySelector(".badge-time").textContent = fmtTime(d.created_at);
-  node.querySelector(".goal").textContent = d.goal || "(no goal)";
+  node.querySelector(".status-label").textContent = d.status;
+  node.querySelector(".id-short").textContent = d.id.slice(0, 6);
   node.querySelector(".client-id").textContent = d.client_id || "?";
-  node.querySelector(".answer-count").textContent = d.answer_count ?? 0;
+  node.querySelector(".model-name").textContent = d.model || "?";
+  const t = node.querySelector(".time-rel");
+  t.textContent = fmtRel(d.created_at);
+  t.title = fmtAbs(d.created_at);
+  node.querySelector(".goal").textContent = d.goal || "(no goal)";
+  node.querySelector(".ans-count").textContent = String(d.answer_count ?? 0);
 }
 
-function renderCardBody(node, d) {
-  const body = node.querySelector(".full-body");
-  body.innerHTML = "";
+function renderBody(node, d) {
+  const dl = node.querySelector(".full-body");
+  dl.innerHTML = "";
   const fields = [
-    ["goal", d.goal],
     ["context", d.context],
     ["tried", d.tried],
     ["error", d.error],
@@ -78,80 +124,101 @@ function renderCardBody(node, d) {
     const dt = document.createElement("dt");
     dt.textContent = k;
     const dd = document.createElement("dd");
-    dd.textContent = v;
-    body.appendChild(dt);
-    body.appendChild(dd);
+    if (looksLikeCode(v)) {
+      const pre = document.createElement("pre");
+      pre.textContent = v;
+      dd.appendChild(pre);
+    } else {
+      dd.textContent = v;
+    }
+    dl.appendChild(dt);
+    dl.appendChild(dd);
   }
-  const answersBox = node.querySelector(".answers");
-  answersBox.innerHTML = "";
-  for (const a of d.answers || []) {
-    answersBox.appendChild(renderAnswer(a));
-  }
+  const ansBox = node.querySelector(".answers");
+  ansBox.innerHTML = "";
+  for (const a of d.answers || []) ansBox.appendChild(renderAnswer(a));
 }
 
 function renderAnswer(a) {
   const div = document.createElement("div");
   div.className = "answer";
   div.dataset.id = a.id;
-  div.innerHTML = `
-    <p><strong>${escapeHtml(a.summary)}</strong>
-      <small>by ${escapeHtml(a.solver_client_id)} (${escapeHtml(a.solver_model)}) at ${fmtTime(a.created_at)}</small>
-    </p>
-  `;
-  if (a.solution) {
-    const pre = document.createElement("pre");
-    const code = document.createElement("code");
-    code.textContent = a.solution;
-    pre.appendChild(code);
-    div.appendChild(pre);
-    if (window.hljs) hljs.highlightElement(code);
-  }
-  if (a.reasoning) {
-    const p = document.createElement("p");
-    p.innerHTML = `<em>reasoning:</em> ${escapeHtml(a.reasoning)}`;
-    div.appendChild(p);
-  }
-  if (a.caveats) {
-    const p = document.createElement("p");
-    p.innerHTML = `<em>caveats:</em> ${escapeHtml(a.caveats)}`;
-    div.appendChild(p);
+
+  const sum = document.createElement("p");
+  sum.className = "ans-summary";
+  sum.textContent = a.summary;
+  div.appendChild(sum);
+
+  const meta = document.createElement("p");
+  meta.className = "ans-meta";
+  meta.innerHTML = `from <b>${escapeHtml(a.solver_client_id)}</b> · ${escapeHtml(a.solver_model)} · ${escapeHtml(fmtRel(a.created_at))}`;
+  div.appendChild(meta);
+
+  const sections = [
+    ["solution", a.solution, true],
+    ["reasoning", a.reasoning, false],
+    ["caveats", a.caveats, false],
+  ];
+  for (const [k, v, isCode] of sections) {
+    if (!v) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "ans-section";
+    const key = document.createElement("span");
+    key.className = "ans-key";
+    key.textContent = k;
+    wrap.appendChild(key);
+    if (isCode || looksLikeCode(v)) {
+      const pre = document.createElement("pre");
+      pre.className = "ans-code";
+      pre.textContent = v;
+      wrap.appendChild(pre);
+    } else {
+      const val = document.createElement("div");
+      val.className = "ans-val";
+      val.textContent = v;
+      wrap.appendChild(val);
+    }
+    div.appendChild(wrap);
   }
   return div;
 }
 
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
-}
-
-function buildCard(d) {
+function buildCard(d, opts = { incoming: false }) {
   const node = el.template.content.firstElementChild.cloneNode(true);
-  renderCardChrome(node, d);
-  node.querySelector(".btn-close").addEventListener("click", () => closeCard(d.id));
-  node.querySelector(".btn-delete").addEventListener("click", () => deleteCard(d.id));
-  node.querySelector("details").addEventListener("toggle", async (ev) => {
+  renderChrome(node, d);
+
+  node.querySelector(".act-close").addEventListener("click", () => closeCard(d.id));
+  node.querySelector(".act-delete").addEventListener("click", () => deleteCard(d.id));
+
+  const expand = node.querySelector(".expand");
+  expand.addEventListener("toggle", async (ev) => {
     if (!ev.target.open) return;
-    const detail = await fetchJson(`/api/requests/${d.id}`);
-    Object.assign(d, detail);
-    renderCardBody(node, d);
+    try {
+      const detail = await fetchJson(`/api/requests/${d.id}`);
+      Object.assign(d, detail);
+      renderBody(node, d);
+    } catch (e) {
+      console.warn("expand fetch failed", e);
+    }
   });
+
+  if (opts.incoming) {
+    node.classList.add("is-incoming");
+    setTimeout(() => node.classList.remove("is-incoming"), 1200);
+  }
   return node;
 }
 
-function upsertCard(d) {
+function upsertCard(d, opts = {}) {
   let entry = state.cardsById.get(d.id);
   if (!entry) {
-    const node = buildCard(d);
+    const node = buildCard(d, opts);
     entry = { node, data: d };
     state.cardsById.set(d.id, entry);
     el.cards.prepend(node);
-    node.classList.add("flash");
-    setTimeout(() => node.classList.remove("flash"), 1100);
   } else {
     entry.data = { ...entry.data, ...d };
-    renderCardChrome(entry.node, entry.data);
+    renderChrome(entry.node, entry.data);
   }
   applyFilter(entry);
   updateCounts();
@@ -160,7 +227,10 @@ function upsertCard(d) {
 function removeCard(id) {
   const entry = state.cardsById.get(id);
   if (!entry) return;
-  entry.node.remove();
+  entry.node.style.transition = "opacity 0.4s, transform 0.4s";
+  entry.node.style.opacity = "0";
+  entry.node.style.transform = "translateY(-6px) scale(0.98)";
+  setTimeout(() => entry.node.remove(), 380);
   state.cardsById.delete(id);
   updateCounts();
 }
@@ -169,12 +239,11 @@ function bumpAnswerCount(rid, ans) {
   const entry = state.cardsById.get(rid);
   if (!entry) return;
   entry.data.answer_count = (entry.data.answer_count || 0) + 1;
-  if (entry.data.answers) entry.data.answers.push(ans);
-  renderCardChrome(entry.node, entry.data);
-  if (entry.node.querySelector("details").open && entry.data.answers) {
+  if (Array.isArray(entry.data.answers)) entry.data.answers.push(ans);
+  renderChrome(entry.node, entry.data);
+  if (entry.node.querySelector(".expand").open && Array.isArray(entry.data.answers)) {
     entry.node.querySelector(".answers").appendChild(renderAnswer(ans));
   }
-  updateCounts();
 }
 
 function markClosed(rid, closedAt) {
@@ -182,7 +251,7 @@ function markClosed(rid, closedAt) {
   if (!entry) return;
   entry.data.status = "closed";
   entry.data.closed_at = closedAt;
-  renderCardChrome(entry.node, entry.data);
+  renderChrome(entry.node, entry.data);
   applyFilter(entry);
   updateCounts();
 }
@@ -200,25 +269,30 @@ async function loadInitial() {
 }
 
 async function closeCard(id) {
-  if (!confirm(`Close request ${id.slice(0, 6)}?`)) return;
+  if (!confirm(`Close signal #${id.slice(0, 6)}?`)) return;
   await fetchJson(`/api/requests/${id}/close`, { method: "POST" });
 }
 
 async function deleteCard(id) {
-  if (!confirm(`Permanently DELETE request ${id.slice(0, 6)}? This cannot be undone.`)) return;
+  if (!confirm(`Expunge signal #${id.slice(0, 6)} permanently? Cannot be undone.`)) return;
   await fetchJson(`/api/requests/${id}`, { method: "DELETE" });
+}
+
+function setLive(stateName, label) {
+  el.liveBadge.dataset.state = stateName;
+  if (el.liveText) el.liveText.textContent = label;
 }
 
 function connectSse() {
   const url = `${SSE_URL}?last_event_id=${state.lastEventId}`;
   const es = new EventSource(url);
-  es.onopen = () => { el.liveBadge.dataset.state = "connected"; el.liveBadge.textContent = "● live"; };
-  es.onerror = () => { el.liveBadge.dataset.state = "reconnecting"; el.liveBadge.textContent = "● reconnecting"; };
+  es.onopen = () => setLive("connected", "live");
+  es.onerror = () => setLive("reconnecting", "reconnecting");
 
   es.addEventListener("request.created", (ev) => {
     const d = JSON.parse(ev.data);
     state.lastEventId = ev.lastEventId ? parseInt(ev.lastEventId) : state.lastEventId;
-    upsertCard(d);
+    upsertCard(d, { incoming: true });
   });
   es.addEventListener("answer.created", (ev) => {
     const a = JSON.parse(ev.data);
@@ -236,7 +310,7 @@ function connectSse() {
     removeCard(d.id);
   });
   es.addEventListener("replay-gap", (ev) => {
-    console.warn("SSE replay-gap, refetching all", ev.data);
+    console.warn("SSE replay-gap, refetching", ev.data);
     state.lastEventId = 0;
     state.cardsById.clear();
     el.cards.innerHTML = "";
@@ -244,14 +318,25 @@ function connectSse() {
   });
 }
 
-el.filterStatus.addEventListener("change", (e) => {
-  state.filter.status = e.target.value;
-  applyFilterAll();
+el.chips.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    el.chips.forEach((b) => b.classList.toggle("is-active", b === btn));
+    state.filter.status = btn.dataset.status;
+    applyFilterAll();
+  });
 });
 el.filterSearch.addEventListener("input", (e) => {
   state.filter.search = e.target.value;
   applyFilterAll();
 });
+
+// Refresh relative timestamps every minute
+setInterval(() => {
+  for (const c of state.cardsById.values()) {
+    const t = c.node.querySelector(".time-rel");
+    if (t) t.textContent = fmtRel(c.data.created_at);
+  }
+}, 60_000);
 
 (async () => {
   try {
@@ -259,7 +344,6 @@ el.filterSearch.addEventListener("input", (e) => {
     connectSse();
   } catch (e) {
     console.error("Dashboard init failed", e);
-    el.liveBadge.dataset.state = "disconnected";
-    el.liveBadge.textContent = "● error";
+    setLive("disconnected", "offline");
   }
 })();
