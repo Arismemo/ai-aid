@@ -150,3 +150,116 @@ class Store:
         with self._conn() as c:
             row = c.execute("SELECT COALESCE(MIN(id), 0) FROM events").fetchone()
             return int(row[0])
+
+    def list_recent_activity(self, limit: int) -> list[dict]:
+        """Return a global activity feed combining request.created and
+        answer.created events with their underlying objects.
+
+        Ordered by event id DESC (newest first), capped at `limit`.
+        Closed/deleted events are excluded — this is "ask/answer" activity.
+        """
+        if limit < 1:
+            limit = 1
+        if limit > 200:
+            limit = 200
+        out: list[dict] = []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT id, kind, payload, created_at FROM events "
+                "WHERE kind IN ('request.created', 'answer.created') "
+                "ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            for row in rows:
+                payload = _json.loads(row["payload"])
+                if row["kind"] == "request.created":
+                    rid = payload.get("id")
+                    req_row = c.execute(
+                        "SELECT * FROM requests WHERE id = ?", (rid,)
+                    ).fetchone()
+                    if req_row is None:
+                        # underlying request was deleted; skip
+                        continue
+                    out.append({
+                        "kind": "request.created",
+                        "at": row["created_at"],
+                        "request": dict(req_row),
+                    })
+                elif row["kind"] == "answer.created":
+                    aid = payload.get("id")
+                    rid = payload.get("request_id")
+                    ans_row = c.execute(
+                        "SELECT * FROM answers WHERE id = ?", (aid,)
+                    ).fetchone()
+                    if ans_row is None:
+                        continue
+                    req_row = c.execute(
+                        "SELECT id, goal, client_id FROM requests WHERE id = ?",
+                        (rid,),
+                    ).fetchone()
+                    if req_row is None:
+                        continue
+                    out.append({
+                        "kind": "answer.created",
+                        "at": row["created_at"],
+                        "answer": dict(ans_row),
+                        "request": dict(req_row),
+                    })
+        return out
+
+    def client_stats(self, client_id: str) -> dict:
+        """Per-client statistics — asks total/open/closed, answers given,
+        asks-received-answer count, and answer_accept_rate."""
+        with self._conn() as c:
+            asks_total = int(c.execute(
+                "SELECT COUNT(*) FROM requests WHERE client_id = ?",
+                (client_id,),
+            ).fetchone()[0])
+            asks_open = int(c.execute(
+                "SELECT COUNT(*) FROM requests WHERE client_id = ? AND status = 'open'",
+                (client_id,),
+            ).fetchone()[0])
+            asks_closed = int(c.execute(
+                "SELECT COUNT(*) FROM requests WHERE client_id = ? AND status = 'closed'",
+                (client_id,),
+            ).fetchone()[0])
+            answers_given = int(c.execute(
+                "SELECT COUNT(*) FROM answers WHERE solver_client_id = ?",
+                (client_id,),
+            ).fetchone()[0])
+            asks_received_answer = int(c.execute(
+                "SELECT COUNT(DISTINCT r.id) FROM requests r "
+                "JOIN answers a ON a.request_id = r.id "
+                "WHERE r.client_id = ?",
+                (client_id,),
+            ).fetchone()[0])
+        if asks_total == 0:
+            accept_rate = None
+        else:
+            accept_rate = asks_received_answer / asks_total
+        return {
+            "client_id": client_id,
+            "asks_total": asks_total,
+            "asks_open": asks_open,
+            "asks_closed": asks_closed,
+            "answers_given": answers_given,
+            "asks_received_answer": asks_received_answer,
+            "answer_accept_rate": accept_rate,
+        }
+
+    def prune_old_closed(self, days: int) -> int:
+        """Delete closed requests whose closed_at is older than `days` days.
+
+        Returns number of rows deleted. days <= 0 is a no-op (returns 0).
+        Cascade deletes answers via FK ON DELETE CASCADE.
+        """
+        if days <= 0:
+            return 0
+        cutoff = _now_ms() - days * 86_400_000
+        with self._conn() as c:
+            cur = c.execute(
+                "DELETE FROM requests WHERE status = 'closed' AND closed_at IS NOT NULL "
+                "AND closed_at < ?",
+                (cutoff,),
+            )
+            return int(cur.rowcount)

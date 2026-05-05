@@ -20,6 +20,17 @@ def create_app() -> FastAPI:
         limit=settings.rate_limit_per_min, window_ms=60_000
     )
 
+    # Configure structured (JSON) logging once per app instance.
+    from ai_aid.logging_setup import configure_logging, install_access_log_middleware
+    configure_logging()
+
+    # Run a startup prune (cheap SQLite delete; fire-and-forget on error).
+    if settings.retention_days > 0:
+        try:
+            app.state.store.prune_old_closed(days=settings.retention_days)
+        except Exception:  # noqa: BLE001
+            pass
+
     register_handlers(app)
 
     from fastapi.exceptions import RequestValidationError
@@ -52,6 +63,9 @@ def create_app() -> FastAPI:
             )
         return await call_next(request)
 
+    # Access log middleware (registered last so it wraps everything else).
+    install_access_log_middleware(app)
+
     app.include_router(health.router)
     from ai_aid.routes import requests as requests_routes
     app.include_router(requests_routes.router)
@@ -61,6 +75,12 @@ def create_app() -> FastAPI:
     app.include_router(lifecycle_routes.router)
     from ai_aid.routes import sse as sse_routes
     app.include_router(sse_routes.router)
+    from ai_aid.routes import recent as recent_routes
+    app.include_router(recent_routes.router)
+    from ai_aid.routes import stats as stats_routes
+    app.include_router(stats_routes.router)
+    from ai_aid.routes import metrics as metrics_routes
+    app.include_router(metrics_routes.router)
 
     from fastapi.staticfiles import StaticFiles
     from pathlib import Path
