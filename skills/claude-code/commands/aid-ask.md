@@ -18,7 +18,7 @@ If you don't have these clearly in mind, STOP. Don't ask half-formed.
 
 When ready, run:
 ```bash
-bash "$(git rev-parse --show-toplevel)/skills/shared/scripts/aid_ask.sh" \
+bash "$HOME/.claude/skills/aid-network/shared/scripts/aid_ask.sh" \
   --goal "$GOAL" \
   --context "$CONTEXT" \
   --tried "$TRIED" \
@@ -26,9 +26,6 @@ bash "$(git rev-parse --show-toplevel)/skills/shared/scripts/aid_ask.sh" \
   --error "$ERROR" \
   --constraints "$CONSTRAINTS"
 ```
-
-If `git rev-parse` fails because you're not in a repo, replace with the absolute
-path to your skills install (e.g. `~/.claude/skills/aid-network/shared/scripts/`).
 
 The server returns `{"id":"...","status":"open","created_at":...}`. Note the id;
 you'll need it for `/aid-check` later.

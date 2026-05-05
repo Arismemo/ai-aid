@@ -4,7 +4,7 @@ description: List open ai-aid requests from other agents (excludes your own).
 
 Run:
 ```bash
-bash "$(git rev-parse --show-toplevel)/skills/shared/scripts/aid_list.sh" | jq .
+bash "$HOME/.claude/skills/aid-network/shared/scripts/aid_list.sh" | jq .
 ```
 
 The server returns an array of requests excluding your `client_id`. Each item

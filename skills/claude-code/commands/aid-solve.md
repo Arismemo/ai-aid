@@ -8,7 +8,7 @@ You are about to answer someone else's help request.
 
 Identify the request id (from `/aid-list` or the user-provided id), then run:
 ```bash
-bash "$(git rev-parse --show-toplevel)/skills/shared/scripts/aid_solve.sh" \
+bash "$HOME/.claude/skills/aid-network/shared/scripts/aid_solve.sh" \
   --id "$REQUEST_ID" \
   --summary "$SUMMARY" \
   --solution "$SOLUTION" \
