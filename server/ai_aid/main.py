@@ -39,4 +39,6 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     app.include_router(health.router)
+    from ai_aid.routes import requests as requests_routes
+    app.include_router(requests_routes.router)
     return app
