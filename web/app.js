@@ -1,8 +1,13 @@
-// ai-aid dashboard — distress signal ledger client
-// Adapts the new "distress ledger" markup. Same data model as before.
+// ai-aid dashboard — minimal GitHub-style.
+// Same data model. New DOM (issue-list rows + Primer aesthetic).
 
 const API_BASE = "";
 const SSE_URL = "/events";
+
+const STATUS_ICONS = {
+  open:   "M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Z",
+  closed: "M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5ZM16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z",
+};
 
 const state = {
   cardsById: new Map(),
@@ -13,7 +18,7 @@ const state = {
 const el = {
   cards: document.getElementById("cards"),
   template: document.getElementById("card-template"),
-  chips: document.querySelectorAll(".chip"),
+  tabs: document.querySelectorAll(".tab"),
   filterSearch: document.getElementById("filter-search"),
   liveBadge: document.getElementById("live-badge"),
   liveText: document.getElementById("live-text"),
@@ -25,13 +30,10 @@ const el = {
 
 if (el.hostName) el.hostName.textContent = location.host || "localhost";
 
+// ---------- formatting ----------
+
 const REL_INTERVALS = [
-  [60, "s"],
-  [60, "m"],
-  [24, "h"],
-  [7, "d"],
-  [4.345, "w"],
-  [12, "mo"],
+  [60, "s"], [60, "m"], [24, "h"], [7, "d"], [4.345, "w"], [12, "mo"],
   [Number.POSITIVE_INFINITY, "y"],
 ];
 
@@ -61,8 +63,11 @@ function escapeHtml(s) {
 
 function looksLikeCode(s) {
   if (!s) return false;
-  return /\n/.test(s) || /[{};]\s*$/.test(s.trim()) || /^\s*(def |class |import |const |let |function |SELECT |CREATE )/.test(s);
+  return /\n/.test(s) || /[{};]\s*$/.test(s.trim()) ||
+    /^\s*(def |class |import |from |const |let |function |SELECT |CREATE |#include )/.test(s);
 }
+
+// ---------- counters & filters ----------
 
 function updateCounts() {
   let open = 0, closed = 0;
@@ -95,22 +100,41 @@ function applyFilterAll() {
   updateCounts();
 }
 
+// ---------- rendering ----------
+
 function renderChrome(node, d) {
   node.dataset.id = d.id;
   node.dataset.status = d.status;
-  node.querySelector(".status-label").textContent = d.status;
-  node.querySelector(".id-short").textContent = d.id.slice(0, 6);
-  node.querySelector(".client-id").textContent = d.client_id || "?";
-  node.querySelector(".model-name").textContent = d.model || "?";
-  const t = node.querySelector(".time-rel");
+
+  const path = node.querySelector(".status-path");
+  if (path) path.setAttribute("d", STATUS_ICONS[d.status] || STATUS_ICONS.open);
+
+  const title = node.querySelector(".issue-title");
+  title.textContent = d.goal || "(no goal)";
+
+  const badges = node.querySelector(".issue-badges");
+  badges.innerHTML = "";
+  if (d.model) {
+    const span = document.createElement("span");
+    span.className = "label label-model";
+    span.textContent = d.model;
+    badges.appendChild(span);
+  }
+
+  node.querySelector(".meta-id").textContent = `#${d.id.slice(0, 7)}`;
+  const t = node.querySelector(".meta-time");
   t.textContent = fmtRel(d.created_at);
   t.title = fmtAbs(d.created_at);
-  node.querySelector(".goal").textContent = d.goal || "(no goal)";
-  node.querySelector(".ans-count").textContent = String(d.answer_count ?? 0);
+  node.querySelector(".meta-client").textContent = d.client_id || "?";
+
+  const ans = d.answer_count ?? 0;
+  const pill = node.querySelector(".ans-pill");
+  pill.querySelector(".ans-count").textContent = String(ans);
+  pill.dataset.has = ans > 0 ? "true" : "false";
 }
 
-function renderBody(node, d) {
-  const dl = node.querySelector(".full-body");
+function renderDetail(node, d) {
+  const dl = node.querySelector(".detail-fields");
   dl.innerHTML = "";
   const fields = [
     ["context", d.context],
@@ -134,7 +158,7 @@ function renderBody(node, d) {
     dl.appendChild(dt);
     dl.appendChild(dd);
   }
-  const ansBox = node.querySelector(".answers");
+  const ansBox = node.querySelector(".detail-answers");
   ansBox.innerHTML = "";
   for (const a of d.answers || []) ansBox.appendChild(renderAnswer(a));
 }
@@ -151,7 +175,7 @@ function renderAnswer(a) {
 
   const meta = document.createElement("p");
   meta.className = "ans-meta";
-  meta.innerHTML = `from <b>${escapeHtml(a.solver_client_id)}</b> · ${escapeHtml(a.solver_model)} · ${escapeHtml(fmtRel(a.created_at))}`;
+  meta.innerHTML = `<b>${escapeHtml(a.solver_client_id)}</b> answered with ${escapeHtml(a.solver_model)} · ${escapeHtml(fmtRel(a.created_at))}`;
   div.appendChild(meta);
 
   const sections = [
@@ -187,24 +211,32 @@ function buildCard(d, opts = { incoming: false }) {
   const node = el.template.content.firstElementChild.cloneNode(true);
   renderChrome(node, d);
 
+  // Title click toggles detail
+  const title = node.querySelector(".issue-title");
+  title.addEventListener("click", (e) => {
+    e.preventDefault();
+    const det = node.querySelector(".issue-detail");
+    det.open = !det.open;
+  });
+
   node.querySelector(".act-close").addEventListener("click", () => closeCard(d.id));
   node.querySelector(".act-delete").addEventListener("click", () => deleteCard(d.id));
 
-  const expand = node.querySelector(".expand");
-  expand.addEventListener("toggle", async (ev) => {
+  const detail = node.querySelector(".issue-detail");
+  detail.addEventListener("toggle", async (ev) => {
     if (!ev.target.open) return;
     try {
-      const detail = await fetchJson(`/api/requests/${d.id}`);
-      Object.assign(d, detail);
-      renderBody(node, d);
+      const fresh = await fetchJson(`/api/requests/${d.id}`);
+      Object.assign(d, fresh);
+      renderDetail(node, d);
     } catch (e) {
-      console.warn("expand fetch failed", e);
+      console.warn("detail fetch failed", e);
     }
   });
 
   if (opts.incoming) {
-    node.classList.add("is-incoming");
-    setTimeout(() => node.classList.remove("is-incoming"), 1200);
+    node.classList.add("is-new");
+    setTimeout(() => node.classList.remove("is-new"), 1300);
   }
   return node;
 }
@@ -227,10 +259,10 @@ function upsertCard(d, opts = {}) {
 function removeCard(id) {
   const entry = state.cardsById.get(id);
   if (!entry) return;
-  entry.node.style.transition = "opacity 0.4s, transform 0.4s";
+  entry.node.style.transition = "opacity 0.25s, transform 0.25s";
   entry.node.style.opacity = "0";
-  entry.node.style.transform = "translateY(-6px) scale(0.98)";
-  setTimeout(() => entry.node.remove(), 380);
+  entry.node.style.transform = "translateY(-4px)";
+  setTimeout(() => entry.node.remove(), 250);
   state.cardsById.delete(id);
   updateCounts();
 }
@@ -241,8 +273,9 @@ function bumpAnswerCount(rid, ans) {
   entry.data.answer_count = (entry.data.answer_count || 0) + 1;
   if (Array.isArray(entry.data.answers)) entry.data.answers.push(ans);
   renderChrome(entry.node, entry.data);
-  if (entry.node.querySelector(".expand").open && Array.isArray(entry.data.answers)) {
-    entry.node.querySelector(".answers").appendChild(renderAnswer(ans));
+  const det = entry.node.querySelector(".issue-detail");
+  if (det.open && Array.isArray(entry.data.answers)) {
+    entry.node.querySelector(".detail-answers").appendChild(renderAnswer(ans));
   }
 }
 
@@ -255,6 +288,8 @@ function markClosed(rid, closedAt) {
   applyFilter(entry);
   updateCounts();
 }
+
+// ---------- API ----------
 
 async function fetchJson(path, init) {
   const resp = await fetch(API_BASE + path, init);
@@ -269,14 +304,16 @@ async function loadInitial() {
 }
 
 async function closeCard(id) {
-  if (!confirm(`Close signal #${id.slice(0, 6)}?`)) return;
+  if (!confirm(`Close request #${id.slice(0, 7)}?`)) return;
   await fetchJson(`/api/requests/${id}/close`, { method: "POST" });
 }
 
 async function deleteCard(id) {
-  if (!confirm(`Expunge signal #${id.slice(0, 6)} permanently? Cannot be undone.`)) return;
+  if (!confirm(`Permanently delete request #${id.slice(0, 7)}? This cannot be undone.`)) return;
   await fetchJson(`/api/requests/${id}`, { method: "DELETE" });
 }
+
+// ---------- SSE ----------
 
 function setLive(stateName, label) {
   el.liveBadge.dataset.state = stateName;
@@ -318,9 +355,11 @@ function connectSse() {
   });
 }
 
-el.chips.forEach((btn) => {
+// ---------- wiring ----------
+
+el.tabs.forEach((btn) => {
   btn.addEventListener("click", () => {
-    el.chips.forEach((b) => b.classList.toggle("is-active", b === btn));
+    el.tabs.forEach((b) => b.classList.toggle("is-active", b === btn));
     state.filter.status = btn.dataset.status;
     applyFilterAll();
   });
@@ -330,10 +369,9 @@ el.filterSearch.addEventListener("input", (e) => {
   applyFilterAll();
 });
 
-// Refresh relative timestamps every minute
 setInterval(() => {
   for (const c of state.cardsById.values()) {
-    const t = c.node.querySelector(".time-rel");
+    const t = c.node.querySelector(".meta-time");
     if (t) t.textContent = fmtRel(c.data.created_at);
   }
 }, 60_000);
