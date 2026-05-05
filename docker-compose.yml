@@ -1,0 +1,24 @@
+services:
+  ai-aid:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: ai-aid:latest
+    container_name: ai-aid
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8000"   # bind to localhost; Nginx proxies in front
+    volumes:
+      - ./data:/data            # SQLite persistence
+      - ./web:/web:ro           # static dashboard files
+    environment:
+      AI_AID_DB_PATH: /data/ai-aid.db
+      AI_AID_MAX_BODY_KB: "100"
+      AI_AID_RATE_LIMIT_PER_MIN: "30"
+      AI_AID_EVENT_BUFFER: "1000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
