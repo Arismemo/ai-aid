@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        working-directory: server
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[test]"
+      - name: Run pytest
+        working-directory: server
+        run: pytest -v --tb=short
+
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats + jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats jq
+      - name: Run bats
+        run: bats skills/tests/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build server image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: false
+          tags: ai-aid:ci
+      - name: Smoke run
+        run: |
+          docker run -d --name ai-aid-ci \
+            -e AI_AID_DB_PATH=/tmp/aid.db \
+            -p 8001:8000 ai-aid:ci
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            sleep 1
+            if curl -fs http://127.0.0.1:8001/health > /tmp/h.json; then
+              cat /tmp/h.json
+              docker rm -f ai-aid-ci
+              exit 0
+            fi
+          done
+          docker logs ai-aid-ci || true
+          docker rm -f ai-aid-ci || true
+          exit 1
