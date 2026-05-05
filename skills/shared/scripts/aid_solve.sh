@@ -32,7 +32,11 @@ if [[ -z "$RID" ]]; then
 fi
 
 if [[ -n "$RAW" ]]; then
-  BODY="$RAW"
+  # Auto-fill solver_client_id and solver_model from config if caller's JSON didn't include them.
+  BODY="$(echo "$RAW" | jq --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \
+    '. as $b | $b
+       | .solver_client_id = ($b.solver_client_id // $cid)
+       | .solver_model     = ($b.solver_model     // $model)')"
 else
   BODY="$(jq -n \
     --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \

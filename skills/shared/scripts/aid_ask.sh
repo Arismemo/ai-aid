@@ -28,7 +28,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -n "$RAW" ]]; then
-  BODY="$RAW"
+  # Auto-fill client_id and model from config if caller's JSON didn't include them.
+  BODY="$(echo "$RAW" | jq --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \
+    '. as $b | $b
+       | .client_id = ($b.client_id // $cid)
+       | .model     = ($b.model     // $model)')"
 else
   BODY="$(jq -n \
     --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \
