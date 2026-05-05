@@ -5,12 +5,14 @@ setup() {
   PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')"
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
   VENV_UV="$REPO_ROOT/server/.venv/bin/uvicorn"
+  # Run uvicorn from server/ so it can import migration_runner.
+  # Use exec inside bash -c so the child process IS uvicorn (no orphan).
   AI_AID_DB_PATH="$TEST_TMP/db.sqlite" \
     AI_AID_RATE_LIMIT_PER_MIN=10000 \
-    bash -c "cd '$REPO_ROOT/server' && '$VENV_UV' ai_aid.main:create_app --factory --host 127.0.0.1 --port '$PORT' --log-level warning" \
+    bash -c "cd '$REPO_ROOT/server' && exec '$VENV_UV' ai_aid.main:create_app --factory --host 127.0.0.1 --port '$PORT' --log-level warning" \
       > "$TEST_TMP/srv.log" 2>&1 &
   SRV_PID=$!
-  # Wait for ready (use the venv's uvicorn from server dir context)
+  # Wait for ready
   for _ in $(seq 1 40); do
     if curl -s -o /dev/null "http://127.0.0.1:$PORT/health"; then
       break
