@@ -16,3 +16,4 @@ data/
 htmlcov/
 .DS_Store
 skills/*/config.json
+.claude/
