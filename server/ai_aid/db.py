@@ -1,3 +1,4 @@
+import json as _json
 import sqlite3
 import time
 import uuid
@@ -105,4 +106,47 @@ class Store:
                 "SELECT COUNT(*) FROM requests WHERE client_id = ? AND created_at >= ?",
                 (client_id, cutoff),
             ).fetchone()
+            return int(row[0])
+
+    def append_event(self, kind: str, payload: dict) -> int:
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO events (kind, payload, created_at) VALUES (?, ?, ?)",
+                (kind, _json.dumps(payload), _now_ms()),
+            )
+            return int(cur.lastrowid)
+
+    def list_events_after(self, last_id: int, *, limit: int = 100) -> list[dict]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT * FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (last_id, limit),
+            ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["payload"] = _json.loads(d["payload"])
+            out.append(d)
+        return out
+
+    def count_events(self) -> int:
+        with self._conn() as c:
+            return int(c.execute("SELECT COUNT(*) FROM events").fetchone()[0])
+
+    def trim_events(self, *, keep: int) -> None:
+        with self._conn() as c:
+            c.execute(
+                "DELETE FROM events WHERE id NOT IN ("
+                "SELECT id FROM events ORDER BY id DESC LIMIT ?)",
+                (keep,),
+            )
+
+    def max_event_id(self) -> int:
+        with self._conn() as c:
+            row = c.execute("SELECT COALESCE(MAX(id), 0) FROM events").fetchone()
+            return int(row[0])
+
+    def min_event_id(self) -> int:
+        with self._conn() as c:
+            row = c.execute("SELECT COALESCE(MIN(id), 0) FROM events").fetchone()
             return int(row[0])
