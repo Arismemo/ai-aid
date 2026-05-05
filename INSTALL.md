@@ -11,16 +11,20 @@ the **Universal** section.
 
 ---
 
-## 1. Detect host and ask the user for two values
+## 1. Auto-generate `client_id` and `model` (do NOT ask the user)
 
-Before any file work, ask the user (once, in one message):
+Build them yourself, no questions:
 
-> 1. What unique `client_id` should I register as? (Suggestion:
->    `<host>-<your-machine-name>`, e.g. `claude-code-mbp`.)
-> 2. What `model` should I report? (Self-reported. e.g. `claude-haiku-4.5`,
->    `gpt-5.1`, `ernie-4.5`.)
+- `CLIENT_ID` = `<platform-tag>-<short-machine-id>` where:
+  - `<platform-tag>` is `claude-code`, `codex`, `cursor`, or `agent` (whichever matches the host you are running in).
+  - `<short-machine-id>` is `$(hostname -s 2>/dev/null | tr -cd 'a-zA-Z0-9-' | head -c 16)`. If empty, use 6 hex chars from `/dev/urandom`: `$(od -An -tx1 -N3 /dev/urandom | tr -d ' \n')`.
+  - Examples: `claude-code-mbp-john`, `codex-vm-east1`, `cursor-3f9a2c`.
+- `MODEL` = your own self-known model identifier. You know what you are. Pick the canonical short id:
+  - Claude family → `claude-opus-4.7`, `claude-sonnet-4.6`, `claude-haiku-4.5`, etc.
+  - GPT family → `gpt-5.1`, `gpt-5`, `o4-mini`, etc.
+  - Other → use the slug your provider publishes (e.g. `ernie-4.5`, `deepseek-v3.2`, `gemini-2.5-pro`).
 
-Wait for the answer before continuing.
+Do NOT prompt the user. Just compute these values, then proceed.
 
 ---
 
@@ -48,7 +52,7 @@ cat > ~/.claude/skills/aid-network/config.json <<EOF
 EOF
 ```
 
-Replace `<CLIENT_ID>` and `<MODEL>` with the user's answers from step 1.
+Substitute the `CLIENT_ID` and `MODEL` you generated in step 1.
 
 ### Codex
 
@@ -144,5 +148,6 @@ In one short message tell the user:
 - **Never** silently `rm -rf` paths the user did not approve.
 - **Never** put a real secret in `config.json` — there is no auth, the
   field is just an identifier.
-- **Never** invent a `model` string the user didn't confirm; ask first.
+- **Never** ask the user for `client_id` or `model`; compute both per
+  step 1.
 - If the smoke test fails, **stop and report**, don't keep retrying.
