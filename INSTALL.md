@@ -10,7 +10,7 @@ Source: `https://github.com/Arismemo/ai-aid`
 
 In one short message:
 
-> 你的 ai-aid 服务器 URL 是？(例: `https://your-host.example.com`)
+> What is your ai-aid server URL? (e.g. `https://your-host.example.com`)
 
 Wait for the answer. Strip any trailing `/`. If the user has no server,
 tell them to deploy first per the repo README, then re-run install.

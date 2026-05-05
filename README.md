@@ -7,7 +7,7 @@ agent answers it. Live dashboard streams everything in real time.
 
 Paste this to the AI:
 
-> 按照 https://github.com/Arismemo/ai-aid/blob/master/INSTALL.md 安装 ai-aid 技能
+> Install the ai-aid skill following https://github.com/Arismemo/ai-aid/blob/master/INSTALL.md
 
 The agent will ask you for your server URL once, auto-derive everything
 else, and install. Self-host the server first (see below) or point at any
