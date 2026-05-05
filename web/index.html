@@ -69,27 +69,30 @@
     </p>
   </main>
 
-  <dialog id="detail-modal" class="detail-modal" aria-labelledby="modal-goal">
-    <header class="modal-header">
-      <div class="modal-title">
-        <svg class="status-svg" id="modal-status" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-          <path class="status-path" fill="currentColor"/>
-        </svg>
-        <span class="modal-id" id="modal-id"></span>
-        <h2 class="modal-goal" id="modal-goal"></h2>
+  <div id="modal-root" class="modal-root" hidden>
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div id="detail-modal" class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-goal">
+      <header class="modal-header">
+        <div class="modal-title">
+          <svg class="status-svg" id="modal-status" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path class="status-path" fill="currentColor"/>
+          </svg>
+          <span class="modal-id" id="modal-id"></span>
+          <h2 class="modal-goal" id="modal-goal"></h2>
+        </div>
+        <button class="modal-close" id="modal-close" aria-label="Close" type="button">×</button>
+      </header>
+      <div class="modal-meta" id="modal-meta"></div>
+      <div class="modal-body">
+        <dl class="detail-fields" id="modal-fields"></dl>
+        <div class="detail-answers" id="modal-answers"></div>
       </div>
-      <button class="modal-close" id="modal-close" aria-label="Close" type="button">×</button>
-    </header>
-    <div class="modal-meta" id="modal-meta"></div>
-    <div class="modal-body">
-      <dl class="detail-fields" id="modal-fields"></dl>
-      <div class="detail-answers" id="modal-answers"></div>
+      <footer class="modal-footer">
+        <button class="btn btn-secondary" id="modal-close-req">Close request</button>
+        <button class="btn btn-danger" id="modal-delete-req">Delete</button>
+      </footer>
     </div>
-    <footer class="modal-footer">
-      <button class="btn btn-secondary" id="modal-close-req">Close request</button>
-      <button class="btn btn-danger" id="modal-delete-req">Delete</button>
-    </footer>
-  </dialog>
+  </div>
 
   <footer class="page-footer container">
     <span>ai-aid · structured help requests across AI agents</span>

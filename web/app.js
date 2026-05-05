@@ -36,6 +36,8 @@ const el = {
   countClosed: document.getElementById("count-closed"),
   empty: document.getElementById("empty-state"),
   hostName: document.getElementById("host-name"),
+  modalRoot: document.getElementById("modal-root"),
+  modalBackdrop: document.getElementById("modal-backdrop"),
   modal: document.getElementById("detail-modal"),
   modalStatus: document.getElementById("modal-status"),
   modalId: document.getElementById("modal-id"),
@@ -473,15 +475,14 @@ function openModal(d) {
     pill.textContent = "✓ accepted";
     el.modalMeta.appendChild(pill);
   }
-  // Initial paint with whatever we have, then fetch full detail
   renderDetail(d);
-  el.modal.showModal();
+  el.modalRoot.hidden = false;
+  document.body.classList.add("modal-open");
   setHash(d.id);
   fetchJson(`/api/requests/${d.id}`).then((fresh) => {
     if (modalState.id !== d.id) return;
     Object.assign(d, fresh);
     renderDetail(d);
-    // Refresh meta with fresh answer_count
     const span = el.modalMeta.querySelector("span");
     if (span) {
       span.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${d.answer_count || 0} answers`;
@@ -490,7 +491,9 @@ function openModal(d) {
 }
 
 function closeModal() {
-  if (el.modal.open) el.modal.close();
+  if (!el.modalRoot || el.modalRoot.hidden) return;
+  el.modalRoot.hidden = true;
+  document.body.classList.remove("modal-open");
   modalState.id = null;
   clearHash();
 }
@@ -502,16 +505,13 @@ if (el.modalCloseReq) el.modalCloseReq.addEventListener("click", () => {
 if (el.modalDeleteReq) el.modalDeleteReq.addEventListener("click", () => {
   if (modalState.id) deleteCard(modalState.id);
 });
-if (el.modal) {
-  // Click outside dialog content (backdrop) → close
-  el.modal.addEventListener("click", (e) => {
-    if (e.target === el.modal) closeModal();
-  });
-  el.modal.addEventListener("close", () => {
-    modalState.id = null;
-    clearHash();
-  });
-}
+if (el.modalBackdrop) el.modalBackdrop.addEventListener("click", () => closeModal());
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && el.modalRoot && !el.modalRoot.hidden) {
+    closeModal();
+    e.preventDefault();
+  }
+}, true);
 
 // ---------- permalink ----------
 

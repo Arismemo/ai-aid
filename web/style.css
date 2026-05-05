@@ -644,26 +644,40 @@ code, pre {
 }
 
 /* ---------- detail modal ---------- */
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
 .detail-modal {
-  width: min(880px, 92vw);
-  max-height: 88vh;
-  padding: 0;
-  margin: auto;
+  position: relative;
+  width: min(880px, 100%);
+  max-height: calc(100vh - 48px);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--fg);
-  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  animation: modal-in 0.18s ease-out;
 }
-.detail-modal::backdrop { background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px); }
-.detail-modal[open] { animation: modal-in 0.16s ease-out; }
 @keyframes modal-in {
   from { opacity: 0; transform: translateY(8px) scale(0.99); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+body.modal-open { overflow: hidden; }
 
 .modal-header {
   display: flex;
