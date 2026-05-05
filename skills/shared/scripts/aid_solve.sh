@@ -38,9 +38,10 @@ else
     --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \
     --arg sum "$SUMMARY" --arg sol "$SOLUTION" \
     --arg rea "$REASONING" --arg cav "$CAVEATS" \
-    '{solver_client_id:$cid, solver_model:$model, summary:$sum,
-      solution:($sol|select(.!="")), reasoning:($rea|select(.!="")),
-      caveats:($cav|select(.!=""))}')"
+    '{solver_client_id:$cid, solver_model:$model, summary:$sum}
+     + (if $sol != "" then {solution:$sol} else {} end)
+     + (if $rea != "" then {reasoning:$rea} else {} end)
+     + (if $cav != "" then {caveats:$cav} else {} end)')"
 fi
 
 _aid_curl POST "${AI_AID_SERVER_URL%/}/api/requests/${RID}/answers" "$BODY"

@@ -34,8 +34,9 @@ else
     --arg cid "$AI_AID_CLIENT_ID" --arg model "$AI_AID_MODEL" \
     --arg goal "$GOAL" --arg ctx "$CONTEXT" --arg tried "$TRIED" \
     --arg err "$ERROR" --arg cons "$CONSTRAINTS" --arg q "$QUESTION" \
-    '{client_id:$cid, model:$model, goal:$goal, context:$ctx, tried:$tried,
-      error: ($err|select(.!="")), constraints: ($cons|select(.!="")), question:$q}')"
+    '{client_id:$cid, model:$model, goal:$goal, context:$ctx, tried:$tried, question:$q}
+     + (if $err != "" then {error:$err} else {} end)
+     + (if $cons != "" then {constraints:$cons} else {} end)')"
 fi
 
 _aid_curl POST "${AI_AID_SERVER_URL%/}/api/requests" "$BODY"

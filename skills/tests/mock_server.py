@@ -37,7 +37,7 @@ class Handler(BaseHTTPRequestHandler):
             "path": self.path,
             "headers": {k.lower(): v for k, v in self.headers.items()},
             "body": body,
-        }) + "\n")
+        }, separators=(",", ":")) + "\n")
         sys.stdout.flush()
 
     def do_GET(self):
