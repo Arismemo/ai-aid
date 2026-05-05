@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ai-aid-preview",
+      "runtimeExecutable": "/Users/liukun/j/ai-aid/server/.venv/bin/uvicorn",
+      "runtimeArgs": ["ai_aid.main:create_app", "--factory", "--host", "127.0.0.1", "--port", "18099", "--app-dir", "/Users/liukun/j/ai-aid/server"],
+      "port": 18099,
+      "env": {"AI_AID_DB_PATH": "/tmp/aid-preview.db"}
+    }
+  ]
+}
