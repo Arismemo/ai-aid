@@ -22,6 +22,10 @@ def create_app() -> FastAPI:
 
     register_handlers(app)
 
+    # Body-size guard: relies on Content-Length being honest. Production
+    # deployments must enforce the real cap at the reverse proxy
+    # (e.g. nginx client_max_body_size) since clients can spoof headers
+    # or use chunked transfer to bypass this check.
     @app.middleware("http")
     async def limit_body_size(request: Request, call_next):
         max_bytes = settings.max_body_kb * 1024
