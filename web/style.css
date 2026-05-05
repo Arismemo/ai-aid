@@ -1,0 +1,32 @@
+header h1 { display: inline-block; margin-right: 1rem; }
+header h1 small { font-size: 0.6em; color: var(--pico-muted-color); }
+
+#stats { display: inline-flex; gap: 1rem; align-items: center; }
+#stats span { padding: 0.2rem 0.6rem; background: var(--pico-card-background-color); border-radius: 0.3rem; }
+
+#live-badge[data-state="connected"] { color: green; }
+#live-badge[data-state="reconnecting"] { color: orange; }
+#live-badge[data-state="disconnected"] { color: red; }
+
+nav { display: flex; gap: 0.5rem; margin: 1rem 0; }
+nav select, nav input { flex: 0 0 auto; }
+nav input { flex: 1; }
+
+#cards { display: grid; gap: 1rem; }
+.card[data-status="closed"] { opacity: 0.7; }
+.card.flash { animation: flash 1s ease-in-out; }
+@keyframes flash {
+  from { background: #fffbcc; }
+  to { background: transparent; }
+}
+
+.card header { display: flex; gap: 0.5rem; align-items: center; }
+.badge-id, .badge-status, .badge-model { font-family: monospace; font-size: 0.85em; }
+.badge-time { margin-left: auto; color: var(--pico-muted-color); font-size: 0.85em; }
+
+.full-body { display: grid; gap: 0.5rem; margin: 1rem 0; }
+.full-body dt { font-weight: bold; margin-top: 0.5rem; }
+
+.answers .answer { border-left: 3px solid var(--pico-primary); padding-left: 1rem; margin: 1rem 0; }
+
+.btn-delete { background-color: var(--pico-del-color); }

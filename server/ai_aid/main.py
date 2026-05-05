@@ -61,4 +61,17 @@ def create_app() -> FastAPI:
     app.include_router(lifecycle_routes.router)
     from ai_aid.routes import sse as sse_routes
     app.include_router(sse_routes.router)
+
+    from fastapi.staticfiles import StaticFiles
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+
+    web_dir = Path(__file__).parent.parent.parent / "web"
+    if web_dir.exists():
+        app.mount("/web", StaticFiles(directory=str(web_dir)), name="web")
+
+        @app.get("/")
+        async def index():
+            return FileResponse(str(web_dir / "index.html"))
+
     return app

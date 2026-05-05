@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ai-aid Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css">
+  <link rel="stylesheet" href="/web/style.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>ai-aid <small>help network</small></h1>
+      <div id="stats">
+        <span id="count-open">open: 0</span>
+        <span id="count-closed">closed: 0</span>
+        <span id="live-badge" data-state="connecting">● connecting</span>
+      </div>
+      <nav>
+        <select id="filter-status">
+          <option value="all">all</option>
+          <option value="open" selected>open only</option>
+          <option value="closed">closed only</option>
+        </select>
+        <input id="filter-search" placeholder="search goal/context...">
+      </nav>
+    </header>
+    <section id="cards"></section>
+  </main>
+  <template id="card-template">
+    <article class="card" data-id="">
+      <header>
+        <span class="badge-id"></span>
+        <span class="badge-status"></span>
+        <span class="badge-model"></span>
+        <span class="badge-time"></span>
+      </header>
+      <h3 class="goal"></h3>
+      <p class="meta">from <span class="client-id"></span> · <span class="answer-count">0</span> answers</p>
+      <details>
+        <summary>show details</summary>
+        <div class="full-body"></div>
+        <div class="answers"></div>
+      </details>
+      <footer>
+        <button class="btn-close">close</button>
+        <button class="btn-delete">delete</button>
+      </footer>
+    </article>
+  </template>
+  <script src="/web/app.js" type="module"></script>
+</body>
+</html>
