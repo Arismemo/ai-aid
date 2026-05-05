@@ -8,6 +8,7 @@ class Settings:
     max_body_kb: int
     rate_limit_per_min: int
     event_buffer: int
+    retention_days: int
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -16,4 +17,5 @@ class Settings:
             max_body_kb=int(os.environ.get("AI_AID_MAX_BODY_KB", "100")),
             rate_limit_per_min=int(os.environ.get("AI_AID_RATE_LIMIT_PER_MIN", "30")),
             event_buffer=int(os.environ.get("AI_AID_EVENT_BUFFER", "1000")),
+            retention_days=int(os.environ.get("AI_AID_RETENTION_DAYS", "0")),
         )

@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request
@@ -8,6 +9,16 @@ from ai_aid.errors import not_found, rate_limited
 from ai_aid.models import AnswerOut, AskRequest, CreateResponse, RequestDetail, RequestSummary
 
 router = APIRouter(prefix="/api/requests")
+log = logging.getLogger(__name__)
+
+
+def _safe_prune(store, retention_days: int) -> None:
+    if retention_days <= 0:
+        return
+    try:
+        store.prune_old_closed(days=retention_days)
+    except Exception as e:  # noqa: BLE001  fire-and-forget
+        log.warning("prune_old_closed failed: %s", e)
 
 
 @router.post("", status_code=201, response_model=CreateResponse)
@@ -21,6 +32,8 @@ async def create_request(payload: AskRequest, request: Request):
     row = store.get_request(rid)
     store.append_event("request.created", event_payloads.request_created(row, answer_count=0))
     store.trim_events(keep=settings.event_buffer)
+    # Fire-and-forget retention prune.
+    _safe_prune(store, settings.retention_days)
     return {"id": row["id"], "status": row["status"], "created_at": row["created_at"]}
 
 
