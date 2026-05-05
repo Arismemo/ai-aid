@@ -23,7 +23,17 @@ mkdir -p "$OUT_DIR"
 TS="$(date +%F_%H%M%S)"
 TARGET="${OUT_DIR}/ai-aid-${TS}.db"
 
-sqlite3 "$DB" ".backup '${TARGET}'"
+# Use python3 if sqlite3 CLI is missing (more universal on minimal hosts).
+if command -v sqlite3 >/dev/null 2>&1; then
+  sqlite3 "$DB" ".backup '${TARGET}'"
+else
+  python3 - "$DB" "$TARGET" <<'PY'
+import sqlite3, sys
+src, dst = sys.argv[1], sys.argv[2]
+with sqlite3.connect(src) as s, sqlite3.connect(dst) as d:
+    s.backup(d)
+PY
+fi
 gzip -9 "$TARGET"
 echo "[backup] wrote ${TARGET}.gz"
 
