@@ -1,5 +1,9 @@
 FROM python:3.12-slim AS builder
 WORKDIR /build
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=180
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && \
     pip wheel --wheel-dir /wheels \
