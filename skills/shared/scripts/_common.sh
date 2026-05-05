@@ -14,12 +14,21 @@ _aid_load_config() {
   if [[ -z "$cfg" ]]; then
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[1]}")" && pwd)"
-    # Default: config.json one directory up from the scripts dir
-    cfg="${script_dir}/../config.json"
+    # Walk up from the scripts dir looking for config.json. Covers both
+    # layouts: codex/cursor put config at <root>/config.json (one up);
+    # claude-code puts it at <root>/config.json with scripts at <root>/shared/scripts/ (two up).
+    local d="$script_dir"
+    for _ in 1 2 3; do
+      d="$(dirname "$d")"
+      if [[ -f "$d/config.json" ]]; then
+        cfg="$d/config.json"
+        break
+      fi
+    done
   fi
-  if [[ ! -f "$cfg" ]]; then
-    echo "[aid-network] config not found at: $cfg" >&2
-    echo "[aid-network] Set AI_AID_CONFIG=/path/to/config.json or place config.json in the skill root." >&2
+  if [[ -z "$cfg" || ! -f "$cfg" ]]; then
+    echo "[aid-network] config not found near scripts dir" >&2
+    echo "[aid-network] Set AI_AID_CONFIG=/path/to/config.json or place config.json beside the skill root." >&2
     return 2
   fi
   if ! command -v jq >/dev/null 2>&1; then
