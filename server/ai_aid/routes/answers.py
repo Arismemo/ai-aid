@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 
+from ai_aid import events as event_payloads
 from ai_aid.errors import forbidden, not_found, conflict
 from ai_aid.models import AnswerRequest
 
@@ -19,4 +20,7 @@ async def create_answer(rid: str, payload: AnswerRequest, request: Request):
     aid = store.create_answer(rid, payload.model_dump())
     answers = store.list_answers(rid)
     new_one = next(a for a in answers if a["id"] == aid)
+    settings = request.app.state.settings
+    store.append_event("answer.created", event_payloads.answer_created(rid, new_one))
+    store.trim_events(keep=settings.event_buffer)
     return {"id": aid, "created_at": new_one["created_at"]}

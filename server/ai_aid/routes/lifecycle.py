@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 
+from ai_aid import events as event_payloads
 from ai_aid.errors import not_found, conflict
 
 router = APIRouter(prefix="/api/requests")
@@ -14,4 +15,10 @@ async def close_request(rid: str, request: Request):
     if not store.close_request(rid):
         raise conflict("request not open", status=row["status"], request_id=rid)
     closed = store.get_request(rid)
+    settings = request.app.state.settings
+    store.append_event(
+        "request.closed",
+        event_payloads.request_closed(rid, closed_at=closed["closed_at"]),
+    )
+    store.trim_events(keep=settings.event_buffer)
     return {"id": rid, "status": closed["status"], "closed_at": closed["closed_at"]}

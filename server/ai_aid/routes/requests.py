@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
+from ai_aid import events as event_payloads
 from ai_aid.errors import not_found, rate_limited
 from ai_aid.models import AnswerOut, AskRequest, CreateResponse, RequestDetail, RequestSummary
 
@@ -18,6 +19,8 @@ async def create_request(payload: AskRequest, request: Request):
     store = request.app.state.store
     rid = store.create_request(payload.model_dump())
     row = store.get_request(rid)
+    store.append_event("request.created", event_payloads.request_created(row, answer_count=0))
+    store.trim_events(keep=settings.event_buffer)
     return {"id": row["id"], "status": row["status"], "created_at": row["created_at"]}
 
 
@@ -67,4 +70,7 @@ async def delete_request(rid: str, request: Request):
     store = request.app.state.store
     if not store.delete_request(rid):
         raise not_found(f"request {rid} not found", request_id=rid)
+    settings = request.app.state.settings
+    store.append_event("request.deleted", event_payloads.request_deleted(rid))
+    store.trim_events(keep=settings.event_buffer)
     return Response(status_code=204)
