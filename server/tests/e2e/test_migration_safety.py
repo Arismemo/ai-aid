@@ -46,21 +46,22 @@ def test_rerun_migrations_preserves_data(tmp_path):
 
 
 def test_migration_runner_handles_new_migration(tmp_path):
-    """Drop a fake 002_*.sql in, re-run; first migration's data preserved."""
+    """Drop a fake 003_*.sql in, re-run; earlier migrations' data preserved."""
     db_path = str(tmp_path / "x.db")
     apply_migrations(db_path)
     store = db_mod.Store(db_path)
     rid, _ = _seed(store)
 
     # Drop a fake migration alongside the real ones
-    fake = MIGRATIONS_DIR / "002_test_idempotency.sql"
+    fake = MIGRATIONS_DIR / "003_test_idempotency.sql"
     fake.write_text("CREATE TABLE _harmless (x TEXT);\n", encoding="utf-8")
     try:
         apply_migrations(db_path)
-        # Verify both migrations applied
+        # Verify all migrations applied (real + fake)
         conn = sqlite3.connect(db_path)
         versions = sorted(r[0] for r in conn.execute("SELECT version FROM _migrations"))
-        assert versions == ["001_init", "002_test_idempotency"]
+        assert "001_init" in versions
+        assert "003_test_idempotency" in versions
         # Data preserved
         assert store.get_request(rid) is not None
         # New table exists

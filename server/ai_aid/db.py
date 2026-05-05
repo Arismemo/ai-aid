@@ -93,11 +93,120 @@ class Store:
 
     def list_answers(self, rid: str) -> list[dict]:
         with self._conn() as c:
+            req_row = c.execute(
+                "SELECT accepted_answer_id FROM requests WHERE id = ?",
+                (rid,),
+            ).fetchone()
+            accepted = req_row["accepted_answer_id"] if req_row else None
             rows = c.execute(
-                "SELECT * FROM answers WHERE request_id = ? ORDER BY created_at ASC",
+                "SELECT a.*, "
+                "(SELECT COUNT(*) FROM answer_votes v WHERE v.answer_id = a.id) "
+                "AS votes "
+                "FROM answers a "
+                "WHERE a.request_id = ? ORDER BY a.created_at ASC",
                 (rid,),
             ).fetchall()
-        return [dict(r) for r in rows]
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["accepted"] = bool(accepted) and d["id"] == accepted
+            out.append(d)
+        return out
+
+    def accept_answer(
+        self, rid: str, aid: str, asker_client_id: str
+    ) -> bool:
+        """Mark `aid` as the accepted answer for `rid`.
+
+        Returns True on success. Returns False on ownership mismatch
+        (asker_client_id != requests.client_id) OR if the answer doesn't
+        belong to this request. Raises LookupError if the request or
+        the answer doesn't exist (caller maps to 404).
+        """
+        with self._conn() as c:
+            req = c.execute(
+                "SELECT client_id FROM requests WHERE id = ?", (rid,),
+            ).fetchone()
+            if req is None:
+                raise LookupError(f"request {rid} not found")
+            ans = c.execute(
+                "SELECT request_id FROM answers WHERE id = ?", (aid,),
+            ).fetchone()
+            if ans is None:
+                raise LookupError(f"answer {aid} not found")
+            if ans["request_id"] != rid:
+                # Treat as not-found for this request — the answer exists
+                # but doesn't belong here.
+                raise LookupError(f"answer {aid} not on request {rid}")
+            if req["client_id"] != asker_client_id:
+                return False
+            c.execute(
+                "UPDATE requests SET accepted_answer_id = ? WHERE id = ?",
+                (aid, rid),
+            )
+        return True
+
+    def toggle_vote(self, answer_id: str, voter: str) -> tuple[int, bool]:
+        """Toggle a voter's vote on an answer.
+
+        Returns (new_total_votes, voted_now). Raises LookupError if the
+        answer doesn't exist (caller maps to 404).
+        """
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT 1 FROM answers WHERE id = ?", (answer_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError(f"answer {answer_id} not found")
+            existing = c.execute(
+                "SELECT 1 FROM answer_votes WHERE answer_id = ? AND voter = ?",
+                (answer_id, voter),
+            ).fetchone()
+            if existing:
+                c.execute(
+                    "DELETE FROM answer_votes WHERE answer_id = ? AND voter = ?",
+                    (answer_id, voter),
+                )
+                voted_now = False
+            else:
+                c.execute(
+                    "INSERT INTO answer_votes (answer_id, voter, created_at) "
+                    "VALUES (?, ?, ?)",
+                    (answer_id, voter, _now_ms()),
+                )
+                voted_now = True
+            total = int(c.execute(
+                "SELECT COUNT(*) FROM answer_votes WHERE answer_id = ?",
+                (answer_id,),
+            ).fetchone()[0])
+        return total, voted_now
+
+    def count_votes(self, answer_id: str) -> int:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT COUNT(*) FROM answer_votes WHERE answer_id = ?",
+                (answer_id,),
+            ).fetchone()
+        return int(row[0])
+
+    def get_answer(self, aid: str) -> Optional[dict]:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM answers WHERE id = ?", (aid,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def top_votes_for_request(self, rid: str) -> int:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT COALESCE(MAX(c), 0) FROM ("
+                "  SELECT COUNT(*) AS c FROM answer_votes v "
+                "  JOIN answers a ON a.id = v.answer_id "
+                "  WHERE a.request_id = ? GROUP BY v.answer_id"
+                ")",
+                (rid,),
+            ).fetchone()
+        return int(row[0])
 
     def count_recent_requests(self, client_id: str, window_ms: int) -> int:
         cutoff = _now_ms() - window_ms

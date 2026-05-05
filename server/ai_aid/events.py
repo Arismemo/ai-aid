@@ -34,3 +34,19 @@ def request_closed(rid: str, *, closed_at: int) -> dict:
 
 def request_deleted(rid: str) -> dict:
     return {"id": rid}
+
+
+def request_accepted(rid: str, *, accepted_answer_id: str, accepted_at: int) -> dict:
+    return {
+        "request_id": rid,
+        "accepted_answer_id": accepted_answer_id,
+        "accepted_at": accepted_at,
+    }
+
+
+def answer_vote(answer_id: str, *, request_id: str, votes: int) -> dict:
+    return {
+        "answer_id": answer_id,
+        "request_id": request_id,
+        "votes": votes,
+    }

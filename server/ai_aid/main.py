@@ -81,6 +81,8 @@ def create_app() -> FastAPI:
     app.include_router(stats_routes.router)
     from ai_aid.routes import metrics as metrics_routes
     app.include_router(metrics_routes.router)
+    from ai_aid.routes import quality as quality_routes
+    app.include_router(quality_routes.router)
 
     from fastapi.staticfiles import StaticFiles
     from pathlib import Path

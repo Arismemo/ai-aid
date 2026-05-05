@@ -24,7 +24,7 @@ def test_idempotent(tmp_path):
     conn = sqlite3.connect(db)
     rows = list(conn.execute("SELECT version FROM _migrations"))
     versions = sorted(r[0] for r in rows)
-    assert versions == ["001_init"]
+    assert versions == ["001_init", "002_quality_signals"]
 
 
 def test_records_applied_version(tmp_path):
@@ -32,4 +32,4 @@ def test_records_applied_version(tmp_path):
     apply_migrations(str(db))
     conn = sqlite3.connect(db)
     rows = list(conn.execute("SELECT version FROM _migrations ORDER BY version"))
-    assert rows == [("001_init",)]
+    assert rows == [("001_init",), ("002_quality_signals",)]

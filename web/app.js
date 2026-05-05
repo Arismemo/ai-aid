@@ -10,7 +10,8 @@ const STATUS_ICONS = {
 };
 
 const SORT_KEY = "aid-sort";
-const VALID_SORTS = ["newest", "oldest", "answered", "active"];
+const ACTOR_KEY = "aid-actor";
+const VALID_SORTS = ["newest", "oldest", "answered", "active", "upvoted"];
 
 const state = {
   cardsById: new Map(),
@@ -18,6 +19,7 @@ const state = {
   filter: { status: "open", search: "" },
   sort: VALID_SORTS.includes(localStorage.getItem(SORT_KEY))
     ? localStorage.getItem(SORT_KEY) : "newest",
+  actor: localStorage.getItem(ACTOR_KEY) || "",
   focusedId: null,
 };
 
@@ -27,6 +29,7 @@ const el = {
   tabs: document.querySelectorAll(".tab"),
   filterSearch: document.getElementById("filter-search"),
   sortSelect: document.getElementById("sort-select"),
+  actorInput: document.getElementById("actor-input"),
   liveBadge: document.getElementById("live-badge"),
   liveText: document.getElementById("live-text"),
   countOpen: document.getElementById("count-open"),
@@ -37,6 +40,7 @@ const el = {
 
 if (el.hostName) el.hostName.textContent = location.host || "localhost";
 if (el.sortSelect) el.sortSelect.value = state.sort;
+if (el.actorInput) el.actorInput.value = state.actor;
 
 // ---------- formatting ----------
 
@@ -129,6 +133,7 @@ function sortKey(d) {
     case "newest":   return -d.created_at;
     case "answered": return -((d.answer_count || 0) * 1e15) - d.created_at;
     case "active":   return -(d.closed_at || d.created_at);
+    case "upvoted":  return -((d.top_votes || 0) * 1e15) - d.created_at;
     default:         return -d.created_at;
   }
 }
@@ -154,6 +159,12 @@ function renderChrome(node, d) {
 
   const badges = node.querySelector(".issue-badges");
   badges.innerHTML = "";
+  if (d.accepted_answer_id) {
+    const acc = document.createElement("span");
+    acc.className = "label label-accepted";
+    acc.textContent = "✓ accepted";
+    badges.appendChild(acc);
+  }
   if (d.model) {
     const span = document.createElement("span");
     span.className = "label label-model";
@@ -201,13 +212,46 @@ function renderDetail(node, d) {
   }
   const ansBox = node.querySelector(".detail-answers");
   ansBox.innerHTML = "";
-  for (const a of d.answers || []) ansBox.appendChild(renderAnswer(a));
+  for (const a of d.answers || []) {
+    // Mark accepted from request-level field if not pre-set
+    if (d.accepted_answer_id && d.accepted_answer_id === a.id) a.accepted = true;
+    ansBox.appendChild(renderAnswer(a, d));
+  }
 }
 
-function renderAnswer(a) {
+function renderAnswer(a, parentRequest) {
   const div = document.createElement("div");
   div.className = "answer";
   div.dataset.id = a.id;
+  if (a.accepted) div.classList.add("is-accepted");
+
+  // Quality bar: upvote toggle + (asker-only) accept button + accepted pill
+  const bar = document.createElement("div");
+  bar.className = "ans-quality";
+
+  const upBtn = document.createElement("button");
+  upBtn.type = "button";
+  upBtn.className = "btn btn-vote" + (a.voted_by_me ? " is-voted" : "");
+  upBtn.title = state.actor ? `Toggle vote as ${state.actor}` : "Set 'Acting as' in the header to vote";
+  upBtn.disabled = !state.actor;
+  upBtn.innerHTML = `↑ <span class="vote-count">${a.votes || 0}</span>`;
+  upBtn.addEventListener("click", () => toggleVote(a, parentRequest && parentRequest.id, div));
+  bar.appendChild(upBtn);
+
+  if (a.accepted) {
+    const pill = document.createElement("span");
+    pill.className = "label label-accepted";
+    pill.textContent = "✓ accepted";
+    bar.appendChild(pill);
+  } else if (parentRequest && state.actor && state.actor === parentRequest.client_id) {
+    const acceptBtn = document.createElement("button");
+    acceptBtn.type = "button";
+    acceptBtn.className = "btn btn-accept";
+    acceptBtn.textContent = "Mark accepted";
+    acceptBtn.addEventListener("click", () => markAccepted(parentRequest.id, a.id));
+    bar.appendChild(acceptBtn);
+  }
+  div.appendChild(bar);
 
   const sum = document.createElement("p");
   sum.className = "ans-summary";
@@ -353,6 +397,61 @@ async function closeCard(id) {
   await fetchJson(`/api/requests/${id}/close`, { method: "POST" });
 }
 
+async function toggleVote(answer, requestId, answerNode) {
+  if (!state.actor) {
+    alert("Set 'Acting as' (your client_id) in the header first.");
+    return;
+  }
+  try {
+    const r = await fetchJson(`/api/answers/${answer.id}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voter: state.actor }),
+    });
+    answer.votes = r.votes;
+    answer.voted_by_me = r.voted;
+    if (answerNode) {
+      const cnt = answerNode.querySelector(".vote-count");
+      if (cnt) cnt.textContent = String(r.votes);
+      const btn = answerNode.querySelector(".btn-vote");
+      if (btn) btn.classList.toggle("is-voted", !!r.voted);
+    }
+    // Update parent card data so sort by upvoted reflects
+    if (requestId) {
+      const entry = state.cardsById.get(requestId);
+      if (entry) {
+        entry.data.top_votes = Math.max(entry.data.top_votes || 0, r.votes);
+        if (state.sort === "upvoted") applySort();
+      }
+    }
+  } catch (e) {
+    console.warn("vote failed", e);
+    alert(`Vote failed: ${e.message}`);
+  }
+}
+
+async function markAccepted(rid, aid) {
+  if (!state.actor) {
+    alert("Set 'Acting as' (your client_id, must match request author) in the header.");
+    return;
+  }
+  if (!confirm(`Mark answer #${aid.slice(0, 7)} as the accepted answer for request #${rid.slice(0, 7)}?`)) return;
+  try {
+    await fetchJson(`/api/requests/${rid}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer_id: aid, client_id: state.actor }),
+    });
+    // SSE will deliver request.accepted; UI re-renders from there.
+  } catch (e) {
+    if (String(e.message) === "403") {
+      alert("Only the asker (matching client_id) can accept an answer.");
+    } else {
+      alert(`Accept failed: ${e.message}`);
+    }
+  }
+}
+
 async function deleteCard(id) {
   if (!confirm(`Permanently delete request #${id.slice(0, 7)}? This cannot be undone.`)) return;
   await fetchJson(`/api/requests/${id}`, { method: "DELETE" });
@@ -418,6 +517,39 @@ function connectSse() {
     const d = JSON.parse(ev.data);
     state.lastEventId = ev.lastEventId ? parseInt(ev.lastEventId) : state.lastEventId;
     removeCard(d.id);
+  });
+  es.addEventListener("request.accepted", (ev) => {
+    const d = JSON.parse(ev.data);
+    state.lastEventId = ev.lastEventId ? parseInt(ev.lastEventId) : state.lastEventId;
+    const entry = state.cardsById.get(d.request_id);
+    if (!entry) return;
+    entry.data.accepted_answer_id = d.accepted_answer_id;
+    if (Array.isArray(entry.data.answers)) {
+      for (const a of entry.data.answers) a.accepted = (a.id === d.accepted_answer_id);
+    }
+    renderChrome(entry.node, entry.data);
+    if (entry.node.querySelector(".issue-detail").open) renderDetail(entry.node, entry.data);
+  });
+  es.addEventListener("answer.vote", (ev) => {
+    const d = JSON.parse(ev.data);
+    state.lastEventId = ev.lastEventId ? parseInt(ev.lastEventId) : state.lastEventId;
+    const entry = state.cardsById.get(d.request_id);
+    if (!entry) return;
+    if (Array.isArray(entry.data.answers)) {
+      for (const a of entry.data.answers) {
+        if (a.id === d.answer_id) a.votes = d.votes;
+      }
+    }
+    entry.data.top_votes = Math.max(entry.data.top_votes || 0, d.votes);
+    const det = entry.node.querySelector(".issue-detail");
+    if (det.open) {
+      const ansNode = det.querySelector(`.answer[data-id="${d.answer_id}"]`);
+      if (ansNode) {
+        const cnt = ansNode.querySelector(".vote-count");
+        if (cnt) cnt.textContent = String(d.votes);
+      }
+    }
+    if (state.sort === "upvoted") applySort();
   });
   es.addEventListener("replay-gap", (ev) => {
     console.warn("SSE replay-gap, refetching", ev.data);
@@ -520,6 +652,18 @@ if (el.sortSelect) {
     state.sort = v;
     localStorage.setItem(SORT_KEY, v);
     applySort();
+  });
+}
+
+if (el.actorInput) {
+  el.actorInput.addEventListener("change", (e) => {
+    state.actor = e.target.value.trim();
+    localStorage.setItem(ACTOR_KEY, state.actor);
+    // Re-render any open detail to refresh button states (Mark accepted visibility)
+    for (const c of state.cardsById.values()) {
+      const det = c.node.querySelector(".issue-detail");
+      if (det.open) renderDetail(c.node, c.data);
+    }
   });
 }
 

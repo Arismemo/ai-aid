@@ -65,6 +65,8 @@ class RequestSummary(BaseModel):
     created_at: int
     closed_at: Optional[int]
     answer_count: int
+    accepted_answer_id: Optional[str] = None
+    top_votes: int = 0
 
 
 class AnswerOut(BaseModel):
@@ -76,6 +78,8 @@ class AnswerOut(BaseModel):
     reasoning: Optional[str]
     caveats: Optional[str]
     created_at: int
+    votes: int = 0
+    accepted: bool = False
 
 
 class RequestDetail(BaseModel):
@@ -91,6 +95,7 @@ class RequestDetail(BaseModel):
     status: Literal["open", "closed"]
     created_at: int
     closed_at: Optional[int]
+    accepted_answer_id: Optional[str] = None
     answers: list[AnswerOut]
 
 
@@ -98,3 +103,22 @@ class CreateResponse(BaseModel):
     id: str
     status: Literal["open", "closed"]
     created_at: int
+
+
+class AcceptRequest(BaseModel):
+    answer_id: str
+    client_id: str
+
+    @field_validator("answer_id", "client_id")
+    @classmethod
+    def _nonblank(cls, v: str) -> str:
+        return _required_nonblank(v)
+
+
+class VoteRequest(BaseModel):
+    voter: str
+
+    @field_validator("voter")
+    @classmethod
+    def _nonblank(cls, v: str) -> str:
+        return _required_nonblank(v)

@@ -51,11 +51,14 @@ async def list_requests(
     out = []
     for row in rows:
         answers = store.list_answers(row["id"])
+        top_votes = max((a.get("votes", 0) for a in answers), default=0)
         out.append({
             "id": row["id"], "client_id": row["client_id"], "model": row["model"],
             "goal": row["goal"], "status": row["status"],
             "created_at": row["created_at"], "closed_at": row["closed_at"],
             "answer_count": len(answers),
+            "accepted_answer_id": row.get("accepted_answer_id"),
+            "top_votes": top_votes,
         })
     return out
 
@@ -72,6 +75,8 @@ async def get_request(rid: str, request: Request):
             "solver_model": a["solver_model"], "summary": a["summary"],
             "solution": a["solution"], "reasoning": a["reasoning"],
             "caveats": a["caveats"], "created_at": a["created_at"],
+            "votes": a.get("votes", 0),
+            "accepted": a.get("accepted", False),
         }).model_dump()
         for a in store.list_answers(rid)
     ]

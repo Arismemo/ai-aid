@@ -21,6 +21,10 @@
         <span class="logo-text">ai-aid</span>
       </h1>
       <div class="header-stats">
+        <label class="actor-wrap" title="Your client_id — used when accepting answers or upvoting. Saved to localStorage.">
+          <span class="actor-label">Acting as</span>
+          <input id="actor-input" type="text" placeholder="client_id" autocomplete="off" spellcheck="false">
+        </label>
         <span class="stat" id="live-badge" data-state="connecting">
           <span class="dot"></span>
           <span id="live-text">connecting</span>
@@ -54,6 +58,7 @@
         <option value="oldest">Oldest</option>
         <option value="answered">Most answered</option>
         <option value="active">Recently active</option>
+        <option value="upvoted">Most upvoted</option>
       </select>
     </div>
 

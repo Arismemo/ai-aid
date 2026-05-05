@@ -322,6 +322,91 @@ code, pre {
   white-space: nowrap;
 }
 .label-model { background: var(--bg-hover); color: var(--fg-mute); border-color: var(--border); }
+.label-accepted {
+  background: var(--green-bg);
+  color: var(--green);
+  border-color: var(--green);
+  font-weight: 600;
+}
+
+/* ---------- actor input (header) ---------- */
+.actor-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-mute);
+}
+.actor-label {
+  font-weight: 500;
+}
+.actor-wrap input {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 160px;
+  outline: none;
+}
+.actor-wrap input:focus {
+  border-color: var(--link);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12);
+}
+
+/* ---------- answer actions: upvote + accept ---------- */
+.ans-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 8px;
+  flex-wrap: wrap;
+}
+.btn-vote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg-mute);
+  cursor: pointer;
+}
+.btn-vote:hover { background: var(--bg-hover); color: var(--fg); }
+.btn-vote.is-voted {
+  background: var(--green-bg);
+  border-color: var(--green);
+  color: var(--green);
+}
+.btn-vote .vote-arrow { font-size: 11px; line-height: 1; }
+.btn-accept {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-accept:hover { background: var(--bg-hover); }
+.answer.is-accepted {
+  border-left-color: var(--green);
+  border-left-width: 4px;
+  background: var(--green-bg);
+}
+@media (prefers-color-scheme: dark) {
+  .answer.is-accepted { background: rgba(63, 185, 80, 0.08); }
+}
 
 .issue-meta {
   margin-top: 4px;
