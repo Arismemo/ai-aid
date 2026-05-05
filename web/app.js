@@ -36,7 +36,19 @@ const el = {
   countClosed: document.getElementById("count-closed"),
   empty: document.getElementById("empty-state"),
   hostName: document.getElementById("host-name"),
+  modal: document.getElementById("detail-modal"),
+  modalStatus: document.getElementById("modal-status"),
+  modalId: document.getElementById("modal-id"),
+  modalGoal: document.getElementById("modal-goal"),
+  modalMeta: document.getElementById("modal-meta"),
+  modalFields: document.getElementById("modal-fields"),
+  modalAnswers: document.getElementById("modal-answers"),
+  modalCloseBtn: document.getElementById("modal-close"),
+  modalCloseReq: document.getElementById("modal-close-req"),
+  modalDeleteReq: document.getElementById("modal-delete-req"),
 };
+
+const modalState = { id: null };
 
 if (el.hostName) el.hostName.textContent = location.host || "localhost";
 if (el.sortSelect) el.sortSelect.value = state.sort;
@@ -184,8 +196,10 @@ function renderChrome(node, d) {
   pill.dataset.has = ans > 0 ? "true" : "false";
 }
 
-function renderDetail(node, d) {
-  const dl = node.querySelector(".detail-fields");
+function renderDetail(d) {
+  // Write to modal slots
+  if (modalState.id !== d.id) return; // stale render guard
+  const dl = el.modalFields;
   dl.innerHTML = "";
   const fields = [
     ["context", d.context],
@@ -210,12 +224,10 @@ function renderDetail(node, d) {
     dl.appendChild(dt);
     dl.appendChild(dd);
   }
-  const ansBox = node.querySelector(".detail-answers");
-  ansBox.innerHTML = "";
+  el.modalAnswers.innerHTML = "";
   for (const a of d.answers || []) {
-    // Mark accepted from request-level field if not pre-set
     if (d.accepted_answer_id && d.accepted_answer_id === a.id) a.accepted = true;
-    ansBox.appendChild(renderAnswer(a, d));
+    el.modalAnswers.appendChild(renderAnswer(a, d));
   }
 }
 
@@ -300,25 +312,7 @@ function buildCard(d, opts = { incoming: false }) {
   const title = node.querySelector(".issue-title");
   title.addEventListener("click", (e) => {
     e.preventDefault();
-    const det = node.querySelector(".issue-detail");
-    det.open = !det.open;
-    if (det.open) setHash(d.id);
-  });
-
-  node.querySelector(".act-close").addEventListener("click", () => closeCard(d.id));
-  node.querySelector(".act-delete").addEventListener("click", () => deleteCard(d.id));
-
-  const detail = node.querySelector(".issue-detail");
-  detail.addEventListener("toggle", async (ev) => {
-    if (ev.target.open) setHash(d.id);
-    if (!ev.target.open) return;
-    try {
-      const fresh = await fetchJson(`/api/requests/${d.id}`);
-      Object.assign(d, fresh);
-      renderDetail(node, d);
-    } catch (e) {
-      console.warn("detail fetch failed", e);
-    }
+    openModal(d);
   });
 
   if (opts.incoming) {
@@ -360,10 +354,9 @@ function bumpAnswerCount(rid, ans) {
   entry.data.answer_count = (entry.data.answer_count || 0) + 1;
   if (Array.isArray(entry.data.answers)) entry.data.answers.push(ans);
   renderChrome(entry.node, entry.data);
-  const det = entry.node.querySelector(".issue-detail");
-  if (det.open && Array.isArray(entry.data.answers)) {
-    const a = renderAnswer(ans);
-    entry.node.querySelector(".detail-answers").appendChild(a);
+  if (modalState.id === rid) {
+    if (!Array.isArray(entry.data.answers)) entry.data.answers = [ans];
+    el.modalAnswers.appendChild(renderAnswer(ans, entry.data));
   }
 }
 
@@ -395,6 +388,7 @@ async function loadInitial() {
 async function closeCard(id) {
   if (!confirm(`Close request #${id.slice(0, 7)}?`)) return;
   await fetchJson(`/api/requests/${id}/close`, { method: "POST" });
+  if (modalState.id === id) closeModal();
 }
 
 async function toggleVote(answer, requestId, answerNode) {
@@ -455,6 +449,68 @@ async function markAccepted(rid, aid) {
 async function deleteCard(id) {
   if (!confirm(`Permanently delete request #${id.slice(0, 7)}? This cannot be undone.`)) return;
   await fetchJson(`/api/requests/${id}`, { method: "DELETE" });
+  if (modalState.id === id) closeModal();
+}
+
+// ---------- modal ----------
+
+function openModal(d) {
+  modalState.id = d.id;
+  el.modal.dataset.status = d.status;
+  if (el.modalStatus) {
+    const path = el.modalStatus.querySelector(".status-path");
+    if (path) path.setAttribute("d", STATUS_ICONS[d.status] || STATUS_ICONS.open);
+  }
+  el.modalId.textContent = `#${d.id.slice(0, 7)}`;
+  el.modalGoal.textContent = d.goal || "(no goal)";
+  el.modalMeta.innerHTML = "";
+  const meta = document.createElement("span");
+  meta.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${d.answer_count || 0} answers`;
+  el.modalMeta.appendChild(meta);
+  if (d.accepted_answer_id) {
+    const pill = document.createElement("span");
+    pill.className = "label label-accepted";
+    pill.textContent = "✓ accepted";
+    el.modalMeta.appendChild(pill);
+  }
+  // Initial paint with whatever we have, then fetch full detail
+  renderDetail(d);
+  el.modal.showModal();
+  setHash(d.id);
+  fetchJson(`/api/requests/${d.id}`).then((fresh) => {
+    if (modalState.id !== d.id) return;
+    Object.assign(d, fresh);
+    renderDetail(d);
+    // Refresh meta with fresh answer_count
+    const span = el.modalMeta.querySelector("span");
+    if (span) {
+      span.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${d.answer_count || 0} answers`;
+    }
+  }).catch((e) => console.warn("detail fetch failed", e));
+}
+
+function closeModal() {
+  if (el.modal.open) el.modal.close();
+  modalState.id = null;
+  clearHash();
+}
+
+if (el.modalCloseBtn) el.modalCloseBtn.addEventListener("click", () => closeModal());
+if (el.modalCloseReq) el.modalCloseReq.addEventListener("click", () => {
+  if (modalState.id) closeCard(modalState.id);
+});
+if (el.modalDeleteReq) el.modalDeleteReq.addEventListener("click", () => {
+  if (modalState.id) deleteCard(modalState.id);
+});
+if (el.modal) {
+  // Click outside dialog content (backdrop) → close
+  el.modal.addEventListener("click", (e) => {
+    if (e.target === el.modal) closeModal();
+  });
+  el.modal.addEventListener("close", () => {
+    modalState.id = null;
+    clearHash();
+  });
 }
 
 // ---------- permalink ----------
@@ -471,16 +527,14 @@ function jumpToHash() {
   if (!id) return;
   const entry = state.cardsById.get(id);
   if (!entry) return;
-  // Switch to All tab if filter would hide it
   if (entry.node.style.display === "none") {
     el.tabs.forEach((b) => b.classList.toggle("is-active", b.dataset.status === "all"));
     state.filter.status = "all";
     applyFilterAll();
   }
-  const det = entry.node.querySelector(".issue-detail");
-  det.open = true;
   entry.node.scrollIntoView({ behavior: "smooth", block: "center" });
   focusRow(entry);
+  if (modalState.id !== id) openModal(entry.data);
 }
 
 // ---------- SSE ----------
@@ -528,7 +582,7 @@ function connectSse() {
       for (const a of entry.data.answers) a.accepted = (a.id === d.accepted_answer_id);
     }
     renderChrome(entry.node, entry.data);
-    if (entry.node.querySelector(".issue-detail").open) renderDetail(entry.node, entry.data);
+    if (modalState.id === d.request_id) renderDetail(entry.data);
   });
   es.addEventListener("answer.vote", (ev) => {
     const d = JSON.parse(ev.data);
@@ -541,9 +595,8 @@ function connectSse() {
       }
     }
     entry.data.top_votes = Math.max(entry.data.top_votes || 0, d.votes);
-    const det = entry.node.querySelector(".issue-detail");
-    if (det.open) {
-      const ansNode = det.querySelector(`.answer[data-id="${d.answer_id}"]`);
+    if (modalState.id === d.request_id) {
+      const ansNode = el.modalAnswers.querySelector(`.answer[data-id="${d.answer_id}"]`);
       if (ansNode) {
         const cnt = ansNode.querySelector(".vote-count");
         if (cnt) cnt.textContent = String(d.votes);
@@ -616,9 +669,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "e" || e.key === "Enter") {
     const entry = focusedEntry();
     if (!entry) return;
-    const det = entry.node.querySelector(".issue-detail");
-    det.open = !det.open;
-    if (det.open) setHash(entry.data.id);
+    if (modalState.id === entry.data.id) closeModal();
+    else openModal(entry.data);
     e.preventDefault();
     return;
   }
@@ -659,10 +711,9 @@ if (el.actorInput) {
   el.actorInput.addEventListener("change", (e) => {
     state.actor = e.target.value.trim();
     localStorage.setItem(ACTOR_KEY, state.actor);
-    // Re-render any open detail to refresh button states (Mark accepted visibility)
-    for (const c of state.cardsById.values()) {
-      const det = c.node.querySelector(".issue-detail");
-      if (det.open) renderDetail(c.node, c.data);
+    if (modalState.id) {
+      const entry = state.cardsById.get(modalState.id);
+      if (entry) renderDetail(entry.data);
     }
   });
 }

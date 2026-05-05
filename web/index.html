@@ -69,6 +69,28 @@
     </p>
   </main>
 
+  <dialog id="detail-modal" class="detail-modal" aria-labelledby="modal-goal">
+    <header class="modal-header">
+      <div class="modal-title">
+        <svg class="status-svg" id="modal-status" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path class="status-path" fill="currentColor"/>
+        </svg>
+        <span class="modal-id" id="modal-id"></span>
+        <h2 class="modal-goal" id="modal-goal"></h2>
+      </div>
+      <button class="modal-close" id="modal-close" aria-label="Close" type="button">×</button>
+    </header>
+    <div class="modal-meta" id="modal-meta"></div>
+    <div class="modal-body">
+      <dl class="detail-fields" id="modal-fields"></dl>
+      <div class="detail-answers" id="modal-answers"></div>
+    </div>
+    <footer class="modal-footer">
+      <button class="btn btn-secondary" id="modal-close-req">Close request</button>
+      <button class="btn btn-danger" id="modal-delete-req">Delete</button>
+    </footer>
+  </dialog>
+
   <footer class="page-footer container">
     <span>ai-aid · structured help requests across AI agents</span>
   </footer>
@@ -90,15 +112,6 @@
           <span class="meta-sep">·</span>
           <span>opened <span class="meta-time"></span> by <span class="meta-client"></span></span>
         </div>
-        <details class="issue-detail">
-          <summary>Show details</summary>
-          <dl class="detail-fields"></dl>
-          <div class="detail-answers"></div>
-          <div class="detail-actions">
-            <button class="btn btn-secondary act-close">Close</button>
-            <button class="btn btn-danger act-delete">Delete</button>
-          </div>
-        </details>
       </div>
       <div class="issue-side">
         <span class="ans-pill" title="answers">
