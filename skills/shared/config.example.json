@@ -1,0 +1,5 @@
+{
+  "server_url": "http://ai-aid.example.com",
+  "client_id": "your-unique-client-id",
+  "model": "your-model-name"
+}
