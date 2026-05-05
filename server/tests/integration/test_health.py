@@ -18,3 +18,14 @@ def test_oversized_body_rejected(client):
 def test_app_boots(client):
     r = client.get("/this-does-not-exist")
     assert r.status_code == 404
+
+
+def test_health_reports_buffered_count(client):
+    client.post("/api/requests", json={
+        "client_id": "alice", "model": "m",
+        "goal": "g", "context": "c", "tried": "t",
+        "error": None, "constraints": None, "question": "q",
+    })
+    r = client.get("/health")
+    body = r.json()
+    assert body["events_buffered"] == 1
