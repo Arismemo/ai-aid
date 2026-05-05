@@ -43,4 +43,6 @@ def create_app() -> FastAPI:
     app.include_router(requests_routes.router)
     from ai_aid.routes import answers as answers_routes
     app.include_router(answers_routes.router)
+    from ai_aid.routes import lifecycle as lifecycle_routes
+    app.include_router(lifecycle_routes.router)
     return app

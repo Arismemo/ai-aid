@@ -1,10 +1,10 @@
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from ai_aid.errors import rate_limited
-from ai_aid.models import AskRequest, CreateResponse, RequestSummary
+from ai_aid.errors import not_found, rate_limited
+from ai_aid.models import AnswerOut, AskRequest, CreateResponse, RequestDetail, RequestSummary
 
 router = APIRouter(prefix="/api/requests")
 
@@ -42,3 +42,29 @@ async def list_requests(
             "answer_count": len(answers),
         })
     return out
+
+
+@router.get("/{rid}", response_model=RequestDetail)
+async def get_request(rid: str, request: Request):
+    store = request.app.state.store
+    row = store.get_request(rid)
+    if row is None:
+        raise not_found(f"request {rid} not found", request_id=rid)
+    answers = [
+        AnswerOut(**{
+            "id": a["id"], "solver_client_id": a["solver_client_id"],
+            "solver_model": a["solver_model"], "summary": a["summary"],
+            "solution": a["solution"], "reasoning": a["reasoning"],
+            "caveats": a["caveats"], "created_at": a["created_at"],
+        }).model_dump()
+        for a in store.list_answers(rid)
+    ]
+    return {**row, "answers": answers}
+
+
+@router.delete("/{rid}", status_code=204)
+async def delete_request(rid: str, request: Request):
+    store = request.app.state.store
+    if not store.delete_request(rid):
+        raise not_found(f"request {rid} not found", request_id=rid)
+    return Response(status_code=204)
