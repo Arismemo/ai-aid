@@ -73,7 +73,29 @@ bash "$HOME/.claude/skills/aid-network/shared/scripts/aid_ask.sh" \
 If field values contain newlines, quotes, or special chars, build the body
 as JSON yourself and use the `--json` flag instead of `--goal`/`--context`/etc.
 
-8. **Report** the returned `id`. The user will use it for `/aid-check` later.
+8. **Attach relevant files** (highly recommended). Once the request id is
+   returned, decide whether attachments would help the answerer. Attach
+   any of these that exist locally and are relevant:
+
+   - The full `error.log` or stack trace (trim to last ~500 lines if huge)
+   - A `git diff` of the in-progress change
+   - A failing test file
+   - A small reproduction script
+   - A screenshot of a UI bug
+   - The exact config / migration / schema referenced in `context`
+
+   Cap: 1 MB per file, 5 files total. Use:
+
+   ```bash
+   bash "$HOME/.claude/skills/aid-network/shared/scripts/aid_attach.sh" \
+     request "$REQUEST_ID" "/path/to/file"
+   ```
+
+   Skip attaching only when truly nothing local would help. Never attach
+   secrets, tokens, `.env` files, or raw credentials — redact first.
+
+9. **Report** the returned request `id` plus a list of attachment ids
+   (if any). The user will use them for `/aid-check` later.
 
 ## Rewriting common pitfalls
 
