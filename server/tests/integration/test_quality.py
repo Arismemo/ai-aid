@@ -276,7 +276,11 @@ def test_migration_002_applies_on_top_of_001_with_seed(tmp_path):
     versions = sorted(r[0] for r in conn.execute(
         "SELECT version FROM _migrations"
     ))
-    assert versions == ["001_init", "002_quality_signals"]
+    assert versions == [
+        "001_init",
+        "002_quality_signals",
+        "003_attachments",
+    ]
     # Existing data preserved
     assert conn.execute("SELECT goal FROM requests WHERE id='r1'").fetchone()[0] == "g"
     assert conn.execute("SELECT summary FROM answers WHERE id='a1'").fetchone()[0] == "s"
@@ -287,3 +291,4 @@ def test_migration_002_applies_on_top_of_001_with_seed(tmp_path):
     assert row[0] is None
     # New table exists and is empty
     assert conn.execute("SELECT COUNT(*) FROM answer_votes").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM attachments").fetchone()[0] == 0

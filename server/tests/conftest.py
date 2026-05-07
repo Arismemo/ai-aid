@@ -10,6 +10,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_AID_RATE_LIMIT_PER_MIN", "30")
     monkeypatch.setenv("AI_AID_MAX_BODY_KB", "100")
     monkeypatch.setenv("AI_AID_EVENT_BUFFER", "1000")
+    monkeypatch.setenv("AI_AID_MAX_ATTACHMENT_KB", "256")
+    monkeypatch.setenv("AI_AID_MAX_ATTACHMENTS_PER_OWNER", "5")
     app = create_app()
     with TestClient(app) as c:
         yield c

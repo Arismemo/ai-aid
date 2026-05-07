@@ -1,3 +1,4 @@
+import hashlib
 import json as _json
 import sqlite3
 import time
@@ -73,7 +74,37 @@ class Store:
 
     def delete_request(self, rid: str) -> bool:
         with self._conn() as c:
+            # Cascade delete attachments — sqlite has no polymorphic FK,
+            # so do it in code. First gather all answer ids for this
+            # request so we can clean up answer-level attachments too.
+            answer_ids = [
+                row["id"] for row in c.execute(
+                    "SELECT id FROM answers WHERE request_id = ?", (rid,),
+                ).fetchall()
+            ]
+            c.execute(
+                "DELETE FROM attachments WHERE owner_kind = 'request' AND owner_id = ?",
+                (rid,),
+            )
+            for aid in answer_ids:
+                c.execute(
+                    "DELETE FROM attachments WHERE owner_kind = 'answer' AND owner_id = ?",
+                    (aid,),
+                )
             cur = c.execute("DELETE FROM requests WHERE id = ?", (rid,))
+            return cur.rowcount == 1
+
+    def delete_answer(self, aid: str) -> bool:
+        """Delete an answer and any attachments owned by it.
+
+        Returns True iff the answer existed (and got deleted).
+        """
+        with self._conn() as c:
+            c.execute(
+                "DELETE FROM attachments WHERE owner_kind = 'answer' AND owner_id = ?",
+                (aid,),
+            )
+            cur = c.execute("DELETE FROM answers WHERE id = ?", (aid,))
             return cur.rowcount == 1
 
     def create_answer(self, rid: str, payload: dict) -> str:
@@ -355,6 +386,81 @@ class Store:
             "asks_received_answer": asks_received_answer,
             "answer_accept_rate": accept_rate,
         }
+
+    # ------------------------------------------------------------------
+    # Attachments
+    # ------------------------------------------------------------------
+
+    def add_attachment(
+        self,
+        *,
+        owner_kind: str,
+        owner_id: str,
+        filename: str,
+        mime: str,
+        content_bytes: bytes,
+        uploader: str,
+    ) -> dict:
+        """Insert a new attachment row. Computes sha256 + size from content_bytes.
+
+        Returns metadata dict (no blob).
+        """
+        if owner_kind not in ("request", "answer"):
+            raise ValueError(f"invalid owner_kind: {owner_kind!r}")
+        att_id = str(uuid.uuid4())
+        size_bytes = len(content_bytes)
+        sha256 = hashlib.sha256(content_bytes).hexdigest()
+        created_at = _now_ms()
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO attachments "
+                "(id, owner_kind, owner_id, filename, mime, size_bytes, sha256, content, uploader, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    att_id, owner_kind, owner_id, filename, mime,
+                    size_bytes, sha256, content_bytes, uploader, created_at,
+                ),
+            )
+        return {
+            "id": att_id,
+            "owner_kind": owner_kind,
+            "owner_id": owner_id,
+            "filename": filename,
+            "mime": mime,
+            "size_bytes": size_bytes,
+            "sha256": sha256,
+            "uploader": uploader,
+            "created_at": created_at,
+        }
+
+    def list_attachments(self, owner_kind: str, owner_id: str) -> list[dict]:
+        """Metadata only, no blob. Ordered by created_at ASC."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT id, owner_kind, owner_id, filename, mime, size_bytes, "
+                "sha256, uploader, created_at "
+                "FROM attachments WHERE owner_kind = ? AND owner_id = ? "
+                "ORDER BY created_at ASC",
+                (owner_kind, owner_id),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_attachment(self, att_id: str) -> Optional[dict]:
+        """Full row including blob. Used for download."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT * FROM attachments WHERE id = ?", (att_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def count_attachments(self, owner_kind: str, owner_id: str) -> int:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT COUNT(*) FROM attachments "
+                "WHERE owner_kind = ? AND owner_id = ?",
+                (owner_kind, owner_id),
+            ).fetchone()
+            return int(row[0])
 
     def prune_old_closed(self, days: int) -> int:
         """Delete closed requests whose closed_at is older than `days` days.

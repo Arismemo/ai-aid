@@ -69,6 +69,16 @@ class RequestSummary(BaseModel):
     top_votes: int = 0
 
 
+class AttachmentMeta(BaseModel):
+    id: str
+    filename: str
+    mime: str
+    size_bytes: int
+    sha256: str
+    uploader: str
+    created_at: int
+
+
 class AnswerOut(BaseModel):
     id: str
     solver_client_id: str
@@ -80,6 +90,7 @@ class AnswerOut(BaseModel):
     created_at: int
     votes: int = 0
     accepted: bool = False
+    attachments: list[AttachmentMeta] = []
 
 
 class RequestDetail(BaseModel):
@@ -97,6 +108,7 @@ class RequestDetail(BaseModel):
     closed_at: Optional[int]
     accepted_answer_id: Optional[str] = None
     answers: list[AnswerOut]
+    attachments: list[AttachmentMeta] = []
 
 
 class CreateResponse(BaseModel):

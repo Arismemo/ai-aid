@@ -63,6 +63,18 @@ async def list_requests(
     return out
 
 
+def _attachment_meta_view(row: dict) -> dict:
+    return {
+        "id": row["id"],
+        "filename": row["filename"],
+        "mime": row["mime"],
+        "size_bytes": row["size_bytes"],
+        "sha256": row["sha256"],
+        "uploader": row["uploader"],
+        "created_at": row["created_at"],
+    }
+
+
 @router.get("/{rid}", response_model=RequestDetail)
 async def get_request(rid: str, request: Request):
     store = request.app.state.store
@@ -77,10 +89,18 @@ async def get_request(rid: str, request: Request):
             "caveats": a["caveats"], "created_at": a["created_at"],
             "votes": a.get("votes", 0),
             "accepted": a.get("accepted", False),
+            "attachments": [
+                _attachment_meta_view(att)
+                for att in store.list_attachments("answer", a["id"])
+            ],
         }).model_dump()
         for a in store.list_answers(rid)
     ]
-    return {**row, "answers": answers}
+    req_attachments = [
+        _attachment_meta_view(att)
+        for att in store.list_attachments("request", rid)
+    ]
+    return {**row, "answers": answers, "attachments": req_attachments}
 
 
 @router.delete("/{rid}", status_code=204)

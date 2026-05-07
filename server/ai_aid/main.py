@@ -53,7 +53,13 @@ def create_app() -> FastAPI:
     # or use chunked transfer to bypass this check.
     @app.middleware("http")
     async def limit_body_size(request: Request, call_next):
-        max_bytes = settings.max_body_kb * 1024
+        # Attachment uploads have their own (larger) per-file cap enforced
+        # in the route handler; let them through here with a generous ceiling.
+        path = request.url.path
+        if path.endswith("/attachments") and request.method == "POST":
+            max_bytes = (settings.max_attachment_kb + 64) * 1024
+        else:
+            max_bytes = settings.max_body_kb * 1024
         cl = request.headers.get("content-length")
         if cl and cl.isdigit() and int(cl) > max_bytes:
             err = payload_too_large(int(cl) // 1024)
@@ -83,6 +89,8 @@ def create_app() -> FastAPI:
     app.include_router(metrics_routes.router)
     from ai_aid.routes import quality as quality_routes
     app.include_router(quality_routes.router)
+    from ai_aid.routes import attachments as attachments_routes
+    app.include_router(attachments_routes.router)
 
     from fastapi.staticfiles import StaticFiles
     from pathlib import Path
