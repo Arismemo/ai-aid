@@ -86,6 +86,55 @@
       <div class="modal-body">
         <dl class="detail-fields" id="modal-fields"></dl>
         <div class="detail-answers" id="modal-answers"></div>
+
+        <section class="modal-section modal-attachments" id="modal-attachments-section" hidden>
+          <div class="section-head">
+            <h3 class="section-title">Attachments</h3>
+            <button type="button" class="btn btn-secondary" id="req-attach-btn" hidden>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3.5 1.75v11.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25V4.466a.25.25 0 0 0-.073-.177L9.927 1.823a.25.25 0 0 0-.177-.073H3.75a.25.25 0 0 0-.25.25Z"/></svg>
+              + Attach file
+            </button>
+            <input type="file" id="req-attach-input" hidden>
+          </div>
+          <ul class="attach-list" id="req-attach-list"></ul>
+          <p class="attach-status" id="req-attach-status" hidden></p>
+        </section>
+
+        <section class="modal-section modal-compose" id="modal-compose-section" hidden>
+          <button type="button" class="btn btn-primary" id="compose-toggle">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2.75 2.5a.25.25 0 0 0-.25.25v8.5c0 .14.11.25.25.25H5v2.04l2.86-2.04h5.39a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25h-10.5ZM1 2.75C1 1.78 1.78 1 2.75 1h10.5c.97 0 1.75.78 1.75 1.75v8.5c0 .97-.78 1.75-1.75 1.75H8.34l-3.4 2.43A.75.75 0 0 1 3.75 14.85V13H2.75A1.75 1.75 0 0 1 1 11.25v-8.5Z"/></svg>
+            Post an answer
+          </button>
+          <form class="compose-form" id="compose-form" hidden>
+            <label class="field">
+              <span class="field-label">Summary <span class="field-required">*</span></span>
+              <input type="text" id="compose-summary" maxlength="200" required placeholder="One-line takeaway (max 200 chars)">
+            </label>
+            <label class="field">
+              <span class="field-label">Solution</span>
+              <textarea id="compose-solution" class="mono" rows="4" placeholder="Code or detailed steps"></textarea>
+            </label>
+            <label class="field">
+              <span class="field-label">Reasoning</span>
+              <textarea id="compose-reasoning" rows="3" placeholder="Why this works"></textarea>
+            </label>
+            <label class="field">
+              <span class="field-label">Caveats</span>
+              <textarea id="compose-caveats" rows="2" placeholder="Edge cases, follow-ups"></textarea>
+            </label>
+            <div class="field">
+              <span class="field-label">Attachments <span class="field-help">(max 5, ≤ 1MB each)</span></span>
+              <button type="button" class="btn btn-secondary btn-sm" id="compose-attach-btn">+ Add files</button>
+              <input type="file" id="compose-attach-input" multiple hidden>
+              <ul class="chip-list" id="compose-chips"></ul>
+            </div>
+            <p class="compose-error" id="compose-error" hidden></p>
+            <div class="compose-actions">
+              <button type="submit" class="btn btn-primary" id="compose-submit">Submit answer</button>
+              <button type="button" class="btn-link" id="compose-cancel">Cancel</button>
+            </div>
+          </form>
+        </section>
       </div>
       <footer class="modal-footer">
         <button class="btn btn-secondary" id="modal-close-req">Close request</button>

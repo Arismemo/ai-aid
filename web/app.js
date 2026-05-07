@@ -48,9 +48,30 @@ const el = {
   modalCloseBtn: document.getElementById("modal-close"),
   modalCloseReq: document.getElementById("modal-close-req"),
   modalDeleteReq: document.getElementById("modal-delete-req"),
+  reqAttachSection: document.getElementById("modal-attachments-section"),
+  reqAttachBtn: document.getElementById("req-attach-btn"),
+  reqAttachInput: document.getElementById("req-attach-input"),
+  reqAttachList: document.getElementById("req-attach-list"),
+  reqAttachStatus: document.getElementById("req-attach-status"),
+  composeSection: document.getElementById("modal-compose-section"),
+  composeToggle: document.getElementById("compose-toggle"),
+  composeForm: document.getElementById("compose-form"),
+  composeSummary: document.getElementById("compose-summary"),
+  composeSolution: document.getElementById("compose-solution"),
+  composeReasoning: document.getElementById("compose-reasoning"),
+  composeCaveats: document.getElementById("compose-caveats"),
+  composeAttachBtn: document.getElementById("compose-attach-btn"),
+  composeAttachInput: document.getElementById("compose-attach-input"),
+  composeChips: document.getElementById("compose-chips"),
+  composeError: document.getElementById("compose-error"),
+  composeSubmit: document.getElementById("compose-submit"),
+  composeCancel: document.getElementById("compose-cancel"),
 };
 
-const modalState = { id: null };
+const modalState = { id: null, data: null };
+const composeState = { open: false, files: [] };
+const MAX_ATTACHMENT_BYTES = 1024 * 1024;
+const MAX_ATTACHMENTS = 5;
 
 if (el.hostName) el.hostName.textContent = location.host || "localhost";
 if (el.sortSelect) el.sortSelect.value = state.sort;
@@ -104,6 +125,62 @@ function highlight(pre) {
     pre.appendChild(code);
   }
   try { window.hljs.highlightElement(code); } catch (_) { /* noop */ }
+}
+
+// ---------- attachments ----------
+
+function humanSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const ATTACH_ICON = `<svg class="attach-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10.78 1.22a3.31 3.31 0 0 1 4.68 4.68l-7 7a2.5 2.5 0 0 1-3.54-3.54l5.5-5.5a1.69 1.69 0 0 1 2.39 2.39L7.5 11.56a.75.75 0 0 1-1.06-1.06l5.31-5.31a.19.19 0 0 0-.27-.27l-5.5 5.5a1 1 0 0 0 1.42 1.42l7-7a1.81 1.81 0 1 0-2.56-2.56L4.94 9.5A.75.75 0 0 1 3.88 8.44l7-7Z"/></svg>`;
+
+function renderAttachmentItem(att) {
+  const li = document.createElement("li");
+  li.className = "attach-item";
+  li.dataset.id = att.id;
+  li.innerHTML = ATTACH_ICON;
+  const a = document.createElement("a");
+  a.className = "attach-name";
+  a.href = `/api/attachments/${att.id}`;
+  a.setAttribute("download", att.filename || "");
+  a.textContent = att.filename || "(unnamed)";
+  li.appendChild(a);
+  const size = document.createElement("span");
+  size.className = "attach-size";
+  size.textContent = humanSize(att.size_bytes);
+  li.appendChild(size);
+  if (att.uploader) {
+    const up = document.createElement("span");
+    up.className = "attach-uploader";
+    up.textContent = `· ${att.uploader}`;
+    li.appendChild(up);
+  }
+  return li;
+}
+
+function renderAttachmentList(target, atts) {
+  target.innerHTML = "";
+  for (const att of atts || []) target.appendChild(renderAttachmentItem(att));
+}
+
+async function uploadAttachment(ownerKind, ownerId, file, uploader) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("uploader", uploader);
+  const path = ownerKind === "request"
+    ? `/api/requests/${ownerId}/attachments`
+    : `/api/answers/${ownerId}/attachments`;
+  const resp = await fetch(API_BASE + path, { method: "POST", body: fd });
+  if (!resp.ok) {
+    let detail = "";
+    try { detail = (await resp.json()).detail || ""; } catch (_) { /* noop */ }
+    throw new Error(detail || `${resp.status}`);
+  }
+  return resp.json();
 }
 
 // ---------- counters & filters ----------
@@ -231,6 +308,38 @@ function renderDetail(d) {
     if (d.accepted_answer_id && d.accepted_answer_id === a.id) a.accepted = true;
     el.modalAnswers.appendChild(renderAnswer(a, d));
   }
+  modalState.data = d;
+  renderRequestAttachments(d);
+  renderComposeVisibility(d);
+}
+
+function renderRequestAttachments(d) {
+  const atts = Array.isArray(d.attachments) ? d.attachments : [];
+  const isAsker = !!state.actor && state.actor === d.client_id;
+  const showSection = atts.length > 0 || isAsker;
+  el.reqAttachSection.hidden = !showSection;
+  if (!showSection) return;
+  renderAttachmentList(el.reqAttachList, atts);
+  el.reqAttachBtn.hidden = !isAsker;
+  if (isAsker) {
+    const atCap = atts.length >= MAX_ATTACHMENTS;
+    el.reqAttachBtn.disabled = atCap;
+    el.reqAttachBtn.title = atCap
+      ? `Attachment limit reached (max ${MAX_ATTACHMENTS}).`
+      : "Attach a file (max 1 MB)";
+  }
+  el.reqAttachStatus.hidden = true;
+  el.reqAttachStatus.classList.remove("is-error");
+  el.reqAttachStatus.textContent = "";
+}
+
+function renderComposeVisibility(d) {
+  const canCompose =
+    d.status === "open" &&
+    !!state.actor &&
+    state.actor !== d.client_id;
+  el.composeSection.hidden = !canCompose;
+  if (!canCompose) collapseCompose();
 }
 
 function renderAnswer(a, parentRequest) {
@@ -304,6 +413,16 @@ function renderAnswer(a, parentRequest) {
     }
     div.appendChild(wrap);
   }
+  if (Array.isArray(a.attachments) && a.attachments.length) {
+    const label = document.createElement("span");
+    label.className = "ans-attach-label";
+    label.textContent = "attachments";
+    div.appendChild(label);
+    const ul = document.createElement("ul");
+    ul.className = "attach-list";
+    renderAttachmentList(ul, a.attachments);
+    div.appendChild(ul);
+  }
   return div;
 }
 
@@ -353,6 +472,10 @@ function removeCard(id) {
 function bumpAnswerCount(rid, ans) {
   const entry = state.cardsById.get(rid);
   if (!entry) return;
+  const existing = Array.isArray(entry.data.answers)
+    ? entry.data.answers.find(a => a.id === ans.id)
+    : null;
+  if (existing) return; // already accounted for (e.g., via post-submit refetch)
   entry.data.answer_count = (entry.data.answer_count || 0) + 1;
   if (Array.isArray(entry.data.answers)) entry.data.answers.push(ans);
   renderChrome(entry.node, entry.data);
@@ -454,7 +577,210 @@ async function deleteCard(id) {
   if (modalState.id === id) closeModal();
 }
 
+// ---------- compose form ----------
+
+function expandCompose() {
+  composeState.open = true;
+  el.composeForm.hidden = false;
+  el.composeToggle.hidden = true;
+  el.composeError.hidden = true;
+  el.composeError.textContent = "";
+  el.composeSummary.focus();
+}
+
+function collapseCompose() {
+  composeState.open = false;
+  composeState.files = [];
+  el.composeForm.hidden = true;
+  el.composeToggle.hidden = false;
+  el.composeForm.reset();
+  el.composeChips.innerHTML = "";
+  el.composeError.hidden = true;
+  el.composeError.textContent = "";
+  el.composeSubmit.disabled = false;
+}
+
+function showComposeError(msg) {
+  el.composeError.textContent = msg;
+  el.composeError.hidden = false;
+}
+
+function renderChips() {
+  el.composeChips.innerHTML = "";
+  composeState.files.forEach((f, idx) => {
+    const li = document.createElement("li");
+    li.className = "chip";
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = f.name;
+    li.appendChild(name);
+    const sz = document.createElement("span");
+    sz.className = "chip-size";
+    sz.textContent = humanSize(f.size);
+    li.appendChild(sz);
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.className = "chip-remove";
+    rm.title = "Remove";
+    rm.textContent = "×";
+    rm.addEventListener("click", () => {
+      composeState.files.splice(idx, 1);
+      renderChips();
+    });
+    li.appendChild(rm);
+    el.composeChips.appendChild(li);
+  });
+}
+
+function addComposeFiles(fileList) {
+  for (const f of fileList) {
+    if (composeState.files.length >= MAX_ATTACHMENTS) {
+      showComposeError(`Max ${MAX_ATTACHMENTS} attachments per answer.`);
+      break;
+    }
+    if (f.size > MAX_ATTACHMENT_BYTES) {
+      showComposeError(`"${f.name}" is ${humanSize(f.size)} (over 1 MB limit).`);
+      continue;
+    }
+    composeState.files.push(f);
+  }
+  renderChips();
+}
+
+async function submitCompose(rid) {
+  const summary = el.composeSummary.value.trim();
+  if (!summary) {
+    showComposeError("Summary is required.");
+    el.composeSummary.focus();
+    return;
+  }
+  if (!state.actor) {
+    showComposeError("Set 'Acting as' (your client_id) in the header first.");
+    return;
+  }
+  el.composeError.hidden = true;
+  el.composeSubmit.disabled = true;
+  el.composeSubmit.textContent = "Submitting…";
+  const body = {
+    solver_client_id: state.actor,
+    solver_model: "web",
+    summary,
+  };
+  const solution = el.composeSolution.value.trim();
+  const reasoning = el.composeReasoning.value.trim();
+  const caveats = el.composeCaveats.value.trim();
+  if (solution) body.solution = solution;
+  if (reasoning) body.reasoning = reasoning;
+  if (caveats) body.caveats = caveats;
+  let answerId;
+  try {
+    const res = await fetchJson(`/api/requests/${rid}/answers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    answerId = res.id;
+  } catch (e) {
+    el.composeSubmit.disabled = false;
+    el.composeSubmit.textContent = "Submit answer";
+    if (String(e.message) === "403") {
+      showComposeError("You can't answer your own request.");
+    } else if (String(e.message) === "409") {
+      showComposeError("Request is no longer open.");
+    } else {
+      showComposeError(`Failed to post answer: ${e.message}`);
+    }
+    return;
+  }
+  // Upload attachments sequentially. Keep answer on partial failure.
+  const failures = [];
+  for (const f of composeState.files) {
+    try {
+      await uploadAttachment("answer", answerId, f, state.actor);
+    } catch (e) {
+      failures.push(`${f.name}: ${e.message || "upload failed"}`);
+    }
+  }
+  // Reset compose UI.
+  el.composeSubmit.disabled = false;
+  el.composeSubmit.textContent = "Submit answer";
+  collapseCompose();
+  // Refetch detail so attachments + new answer are reflected.
+  if (modalState.id === rid) {
+    try {
+      const fresh = await fetchJson(`/api/requests/${rid}`);
+      if (modalState.id === rid) {
+        const entry = state.cardsById.get(rid);
+        if (entry) {
+          entry.data = { ...entry.data, ...fresh };
+          renderChrome(entry.node, entry.data);
+        }
+        renderModalMeta(fresh);
+        renderDetail(fresh);
+      }
+    } catch (_) { /* SSE will deliver answer.created anyway */ }
+  }
+  if (failures.length) {
+    alert(`Answer posted, but ${failures.length} attachment(s) failed:\n\n${failures.join("\n")}`);
+  }
+}
+
+async function uploadRequestAttachment(rid, file) {
+  if (!state.actor) {
+    alert("Set 'Acting as' (your client_id) in the header first.");
+    return;
+  }
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    el.reqAttachStatus.hidden = false;
+    el.reqAttachStatus.classList.add("is-error");
+    el.reqAttachStatus.textContent = `"${file.name}" is ${humanSize(file.size)} (over 1 MB limit).`;
+    return;
+  }
+  el.reqAttachBtn.disabled = true;
+  el.reqAttachStatus.hidden = false;
+  el.reqAttachStatus.classList.remove("is-error");
+  el.reqAttachStatus.textContent = `Uploading ${file.name}…`;
+  try {
+    await uploadAttachment("request", rid, file, state.actor);
+    const fresh = await fetchJson(`/api/requests/${rid}`);
+    if (modalState.id === rid) {
+      const entry = state.cardsById.get(rid);
+      if (entry) {
+        entry.data = { ...entry.data, ...fresh };
+        renderChrome(entry.node, entry.data);
+      }
+      renderModalMeta(fresh);
+      renderDetail(fresh);
+    }
+  } catch (e) {
+    el.reqAttachBtn.disabled = false;
+    el.reqAttachStatus.hidden = false;
+    el.reqAttachStatus.classList.add("is-error");
+    el.reqAttachStatus.textContent = `Upload failed: ${e.message || "unknown error"}`;
+  }
+}
+
 // ---------- modal ----------
+
+function renderModalMeta(d) {
+  el.modalMeta.innerHTML = "";
+  const ansCount = Array.isArray(d.answers) ? d.answers.length : (d.answer_count || 0);
+  const meta = document.createElement("span");
+  meta.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${ansCount} answers`;
+  el.modalMeta.appendChild(meta);
+  if (d.accepted_answer_id) {
+    const pill = document.createElement("span");
+    pill.className = "label label-accepted";
+    pill.textContent = "✓ accepted";
+    el.modalMeta.appendChild(pill);
+  }
+  if (!state.actor) {
+    const hint = document.createElement("span");
+    hint.className = "modal-meta-hint";
+    hint.textContent = "Set 'Acting as' (your name) in the header to post answers or attach files.";
+    el.modalMeta.appendChild(hint);
+  }
+}
 
 function openModal(d) {
   modalState.id = d.id;
@@ -465,16 +791,8 @@ function openModal(d) {
   }
   el.modalId.textContent = `#${d.id.slice(0, 7)}`;
   el.modalGoal.textContent = d.goal || "(no goal)";
-  el.modalMeta.innerHTML = "";
-  const meta = document.createElement("span");
-  meta.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${d.answer_count || 0} answers`;
-  el.modalMeta.appendChild(meta);
-  if (d.accepted_answer_id) {
-    const pill = document.createElement("span");
-    pill.className = "label label-accepted";
-    pill.textContent = "✓ accepted";
-    el.modalMeta.appendChild(pill);
-  }
+  collapseCompose();
+  renderModalMeta(d);
   renderDetail(d);
   el.modalRoot.hidden = false;
   document.body.classList.add("modal-open");
@@ -482,11 +800,10 @@ function openModal(d) {
   fetchJson(`/api/requests/${d.id}`).then((fresh) => {
     if (modalState.id !== d.id) return;
     Object.assign(d, fresh);
-    renderDetail(d);
-    const span = el.modalMeta.querySelector("span");
-    if (span) {
-      span.innerHTML = `<b>${escapeHtml(d.client_id || "?")}</b> · ${escapeHtml(d.model || "")} · opened ${escapeHtml(fmtRel(d.created_at))} · ${d.answer_count || 0} answers`;
-    }
+    const entry = state.cardsById.get(d.id);
+    if (entry) entry.data = { ...entry.data, ...fresh };
+    renderModalMeta(fresh);
+    renderDetail(fresh);
   }).catch((e) => console.warn("detail fetch failed", e));
 }
 
@@ -495,6 +812,8 @@ function closeModal() {
   el.modalRoot.hidden = true;
   document.body.classList.remove("modal-open");
   modalState.id = null;
+  modalState.data = null;
+  collapseCompose();
   clearHash();
 }
 
@@ -713,7 +1032,44 @@ if (el.actorInput) {
     localStorage.setItem(ACTOR_KEY, state.actor);
     if (modalState.id) {
       const entry = state.cardsById.get(modalState.id);
-      if (entry) renderDetail(entry.data);
+      if (entry) {
+        renderModalMeta(entry.data);
+        renderDetail(entry.data);
+      }
+    }
+  });
+}
+
+// ---------- compose + attachment wiring ----------
+
+if (el.composeToggle) {
+  el.composeToggle.addEventListener("click", () => expandCompose());
+}
+if (el.composeCancel) {
+  el.composeCancel.addEventListener("click", () => collapseCompose());
+}
+if (el.composeAttachBtn && el.composeAttachInput) {
+  el.composeAttachBtn.addEventListener("click", () => el.composeAttachInput.click());
+  el.composeAttachInput.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files.length) {
+      addComposeFiles(e.target.files);
+      e.target.value = "";
+    }
+  });
+}
+if (el.composeForm) {
+  el.composeForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (modalState.id) submitCompose(modalState.id);
+  });
+}
+if (el.reqAttachBtn && el.reqAttachInput) {
+  el.reqAttachBtn.addEventListener("click", () => el.reqAttachInput.click());
+  el.reqAttachInput.addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f && modalState.id) {
+      uploadRequestAttachment(modalState.id, f);
+      e.target.value = "";
     }
   });
 }
